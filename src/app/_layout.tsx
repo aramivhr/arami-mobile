@@ -47,8 +47,8 @@ function Root() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="thread/[id]" options={{ title: "Conversation" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
-        <Stack.Screen name="reservations" options={{ title: "Reservations" }} />
-        <Stack.Screen name="financial" options={{ title: "Financial" }} />
+        <Stack.Screen name="reservations" options={{ title: "" }} />
+        <Stack.Screen name="financial" options={{ title: "" }} />
       </Stack>
     </BiometricGate>
   );
