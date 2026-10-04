@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Alert, Pressable, Switch, View } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
-import { Bell, BookOpen, ChevronRight, DollarSign, Fingerprint, LogOut, User } from "lucide-react-native";
+import { Bell, BellRing, BookOpen, ChevronRight, DollarSign, Fingerprint, LogOut, User } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Card, Divider, PageHeader, Text } from "@/components/ui";
 import { useAuth } from "@/hooks/auth";
@@ -11,9 +11,13 @@ import { biometricAvailable, biometricLabel, getBiometricEnabled, setBiometricEn
 import { MORE_BY_TYPE, type ScreenKey } from "@/lib/access";
 import { useColors } from "@/lib/theme";
 
-const SCREEN_META: Record<Exclude<ScreenKey, "messages">, { label: string; href: "/reservations" | "/notifications" | "/financial"; Icon: typeof Bell }> = {
+const SCREEN_META: Record<
+  Exclude<ScreenKey, "messages" | "inspections">,
+  { label: string; href: "/reservations" | "/notifications" | "/financial" | "/alert-settings"; Icon: typeof Bell }
+> = {
   reservations: { label: "Reservations", href: "/reservations", Icon: BookOpen },
   notifications: { label: "Notifications", href: "/notifications", Icon: Bell },
+  alert_settings: { label: "Phone alerts", href: "/alert-settings", Icon: BellRing },
   financial: { label: "Financial", href: "/financial", Icon: DollarSign },
 };
 

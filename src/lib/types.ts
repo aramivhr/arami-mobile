@@ -106,3 +106,56 @@ export interface ThreadMessage {
   at: string | null;
   attachments?: unknown[];
 }
+
+// Mobile-only tables (mobile_*), added to the same Supabase for the app.
+
+export type ItemCondition = "ok" | "damaged" | "missing" | "dirty";
+
+export interface InspectionResult {
+  room: string;
+  item: string;
+  condition: ItemCondition;
+  note: string;
+  /** Storage paths in the mobile-inspection-photos bucket. */
+  photos: string[];
+}
+
+export interface InspectionTemplate {
+  id: string;
+  name: string;
+  rooms: { room: string; items: string[] }[];
+  is_default: boolean;
+}
+
+export interface Inspection {
+  id: string;
+  reservation_id: string | null;
+  apartment_id: string;
+  template_id: string | null;
+  due_date: string;
+  urgent: boolean;
+  status: "pending" | "in_progress" | "completed";
+  inspector_id: string | null;
+  guest_name: string | null;
+  check_in: string | null;
+  check_out: string | null;
+  results: InspectionResult[];
+  general_notes: string | null;
+  summary: string | null;
+  damage_found: boolean;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NotificationSettings {
+  user_id: string;
+  reservation_new: boolean;
+  reservation_modified: boolean;
+  reservation_cancelled: boolean;
+  guest_message: boolean;
+  inspection_due: boolean;
+  inspection_damage: boolean;
+  sync_failure: boolean;
+}

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { unregisterPush } from "@/hooks/push";
 
 interface AuthContextType {
   session: Session | null;
@@ -40,6 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Remove this phone's alert token while still signed in (its row is only deletable by its owner).
+    await unregisterPush();
     await supabase.auth.signOut();
   }, []);
 

@@ -16,13 +16,13 @@ export const TABS_BY_TYPE: Record<UserType, TabKey[]> = {
   owner: ["dashboard", "calendar", "reservations", "more"],
 };
 
-export type ScreenKey = "reservations" | "notifications" | "messages" | "financial";
+export type ScreenKey = "reservations" | "notifications" | "messages" | "financial" | "inspections" | "alert_settings";
 
 /** Screens reachable from the "More" menu, per user type. */
 export const MORE_BY_TYPE: Record<UserType, ScreenKey[]> = {
   // Super admins see everything admins see, plus Financial.
-  super_admin: ["reservations", "notifications", "financial"],
-  admin: ["reservations", "notifications"],
+  super_admin: ["reservations", "notifications", "alert_settings", "financial"],
+  admin: ["reservations", "notifications", "alert_settings"],
   owner: ["financial"],
 };
 
@@ -33,4 +33,9 @@ export function canSeeTab(type: UserType | undefined, tab: TabKey) {
 export function canSeeScreen(type: UserType | undefined, screen: ScreenKey) {
   if (!type) return false;
   return (TABS_BY_TYPE[type] as string[]).includes(screen) || MORE_BY_TYPE[type].includes(screen);
+}
+
+/** Phone alerts go to admins and super admins only; owners never get them. */
+export function getsPushAlerts(type: UserType | undefined) {
+  return type === "admin" || type === "super_admin";
 }

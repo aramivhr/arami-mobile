@@ -45,6 +45,20 @@
         {
           "faceIDPermission": "Unlock Arami Portal with Face ID."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F59E0B",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Arami Portal uses the camera to photograph items during inspections.",
+          "photosPermission": "Arami Portal attaches photos to inspection reports."
+        }
       ]
     ],
     "experiments": {

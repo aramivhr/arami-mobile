@@ -12,6 +12,8 @@ import { DMSans_600SemiBold } from "@expo-google-fonts/dm-sans/600SemiBold";
 import { DMSans_700Bold } from "@expo-google-fonts/dm-sans/700Bold";
 import { AuthProvider, useAuth } from "@/hooks/auth";
 import { BiometricGate } from "@/hooks/biometric";
+import { usePushRegistration, usePushRouting } from "@/hooks/push";
+import { useInspectionSync } from "@/hooks/inspections";
 import { Login } from "@/components/Login";
 import { fonts, useColors } from "@/lib/theme";
 
@@ -31,6 +33,15 @@ function Root() {
 
   if (loading) return <View style={{ flex: 1, backgroundColor: c.background }} />;
   if (!session) return <Login />;
+  return <SignedIn />;
+}
+
+/** Everything that needs a signed-in person: alerts, background upload of inspections, and the screens. */
+function SignedIn() {
+  const c = useColors();
+  usePushRegistration();
+  usePushRouting();
+  useInspectionSync();
 
   return (
     <BiometricGate>
@@ -49,6 +60,8 @@ function Root() {
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
         <Stack.Screen name="reservations" options={{ title: "" }} />
         <Stack.Screen name="financial" options={{ title: "" }} />
+        <Stack.Screen name="inspection/[id]" options={{ title: "Inspection" }} />
+        <Stack.Screen name="alert-settings" options={{ title: "Phone alerts" }} />
       </Stack>
     </BiometricGate>
   );
