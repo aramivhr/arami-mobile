@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
-import type { UserType } from "@/lib/access";
+import { userTypeFromRoles, type UserType } from "@/lib/access";
 
 // Both hooks copy the website's logic (rent-halo-system src/hooks/use-users.ts)
 // so every person gets the same access in the app as on the website.
@@ -14,10 +14,7 @@ export function useUserType() {
     enabled: !!user,
     queryFn: async (): Promise<UserType> => {
       const { data } = await supabase.from("user_roles").select("role").eq("user_id", user!.id);
-      const roles = (data || []).map((r: { role: string }) => r.role);
-      if (roles.includes("super_admin")) return "super_admin";
-      if (roles.includes("admin")) return "admin";
-      return "owner";
+      return userTypeFromRoles(data);
     },
   });
 }

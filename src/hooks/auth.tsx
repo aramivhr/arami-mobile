@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { unregisterPush } from "@/hooks/push";
+import { loginEmail } from "@/lib/access";
 
 interface AuthContextType {
   session: Session | null;
@@ -13,11 +14,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-/** Same rule as the website's login page: a bare username means username@arami.app. */
-export function loginEmail(identifier: string) {
-  const id = identifier.toLowerCase().trim();
-  return id.includes("@") ? id : `${id}@arami.app`;
-}
+export { loginEmail };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

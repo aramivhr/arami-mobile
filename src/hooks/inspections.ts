@@ -155,12 +155,17 @@ export function usePendingCount() {
 
 export const isLocalPhoto = (p: string) => p.startsWith("file:") || p.startsWith("content:") || p.startsWith("blob:") || p.startsWith("data:");
 
+const KEPT_PREFIX = "insp-photos:";
+
 /** Shrinks a photo and keeps a copy in the app's documents so it survives until uploaded. */
-export async function keepPhoto(uri: string): Promise<string> {
+export async function keepPhoto(inspectionId: string, uri: string): Promise<string> {
   const small = await manipulateAsync(uri, [{ resize: { width: 1600 } }], { compress: 0.7, format: SaveFormat.JPEG });
   if (Platform.OS === "web") return small.uri;
   const dest = new File(Paths.document, `insp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`);
   new File(small.uri).copy(dest);
+  // Remember every phone copy per inspection, so copies of photos removed before
+  // upload are cleaned up too.
+  await AsyncStorage.setItem(KEPT_PREFIX + inspectionId, JSON.stringify([...(await keptPhotos(inspectionId)), { uri: dest.uri, at: Date.now() }]));
   return dest.uri;
 }
 
@@ -183,12 +188,19 @@ async function uploadPhoto(inspectionId: string, localUri: string): Promise<stri
   return path;
 }
 
-/** Deletes the phone copies of photos once their inspection is saved in Supabase. */
-async function forgetLocalPhotos(localUris: string[]) {
-  if (!localUris.length) return;
-  const map = await uploadedMap();
-  for (const u of localUris) {
-    delete map[u];
+async function keptPhotos(inspectionId: string) {
+  return JSON.parse((await AsyncStorage.getItem(KEPT_PREFIX + inspectionId)) ?? "[]") as { uri: string; at: number }[];
+}
+
+/**
+ * Deletes the given phone copies of an inspection's photos once its draft is
+ * saved in Supabase. Only copies that existed when the upload started are
+ * passed in, so a photo taken during the upload is never deleted.
+ */
+async function forgetLocalPhotos(inspectionId: string, uris: Set<string>) {
+  // The phone path -> storage path map is kept, so a screen still showing the
+  // phone path maps it to the uploaded file instead of losing the photo.
+  for (const u of uris) {
     if (Platform.OS !== "web") {
       try {
         new File(u).delete();
@@ -197,7 +209,9 @@ async function forgetLocalPhotos(localUris: string[]) {
       }
     }
   }
-  await AsyncStorage.setItem(UPLOADED_KEY, JSON.stringify(map));
+  const stay = (await keptPhotos(inspectionId)).filter((k) => !uris.has(k.uri));
+  if (stay.length) await AsyncStorage.setItem(KEPT_PREFIX + inspectionId, JSON.stringify(stay));
+  else await AsyncStorage.removeItem(KEPT_PREFIX + inspectionId);
 }
 
 /** Short-lived links for showing private photos. */
@@ -251,12 +265,12 @@ export function syncInspections(qc?: QueryClient): Promise<void> {
 }
 
 async function syncOne(id: string) {
+  const keptAtStart = new Set((await keptPhotos(id)).map((k) => k.uri));
   const draft = await loadDraft(id);
   if (!draft) return;
 
   // Upload photos first. The draft on the phone keeps the phone paths (the
   // screen may still be editing it); the row in Supabase gets storage paths.
-  const local: string[] = [];
   const results: InspectionResult[] = [];
   for (const r of draft.results) {
     const photos: string[] = [];
@@ -264,7 +278,6 @@ async function syncOne(id: string) {
       if (isLocalPhoto(p)) {
         // A phone copy that no longer exists was already sent and cleaned up; skip it.
         if (Platform.OS !== "web" && !new File(p).exists && !(await uploadedMap())[p]) continue;
-        local.push(p);
         photos.push(await uploadPhoto(id, p));
       } else photos.push(p);
     }
@@ -290,7 +303,7 @@ async function syncOne(id: string) {
   const latest = await loadDraft(id);
   if (latest && JSON.stringify(latest) === JSON.stringify(draft)) {
     await AsyncStorage.removeItem(DRAFT_PREFIX + id);
-    await forgetLocalPhotos(local);
+    await forgetLocalPhotos(id, keptAtStart);
     listeners.forEach((fn) => fn(id));
   }
 }
@@ -320,8 +333,7 @@ export async function writeSummary(id: string): Promise<string> {
   return summary;
 }
 
-/** Items marked damaged, missing or dirty. */
-export const issuesOf = (results: InspectionResult[]) => results.filter((r) => r.condition !== "ok");
+export { issuesOf } from "@/lib/inspectionDraft";
 
 /** "Building – Apartment" names, as the website shows units. */
 export function useUnitLabel() {

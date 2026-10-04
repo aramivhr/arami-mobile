@@ -58,7 +58,7 @@ function notifyReservationChange(reservation_id: string, kind: "new" | "modified
     .catch((e) => console.error("reservation alert failed", e));
 }
 
-function diffReservation(before: Reservation | undefined, updates: Partial<Reservation>): string[] {
+export function diffReservation(before: Reservation | undefined, updates: Partial<Reservation>): string[] {
   if (!before) return [];
   const labels: [keyof Reservation, string][] = [
     ["guest_name", "Guest"],

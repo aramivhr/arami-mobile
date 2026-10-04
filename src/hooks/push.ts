@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
 import { useUserType } from "@/hooks/permissions";
 import { getsPushAlerts } from "@/lib/access";
+import { pushTarget, type PushData } from "@/lib/notify";
 import type { NotificationSettings } from "@/lib/types";
 
 // Phone alerts. The backend function mobile-push-dispatch sends them through
@@ -91,27 +92,9 @@ export async function unregisterPush() {
   }
 }
 
-type PushData = {
-  type?: "notification" | "inspection" | "sync_failure";
-  kind?: string;
-  reservation_id?: string | null;
-  dedupe_key?: string | null;
-  inspection_id?: string;
-};
-
-/** Where a tapped alert opens, matching the Notifications page. */
+/** Opens the screen a tapped alert points to. */
 export function openFromPush(data: PushData) {
-  if (data.type === "inspection" && data.inspection_id) {
-    router.push({ pathname: "/inspection/[id]", params: { id: data.inspection_id } });
-  } else if (data.type === "notification" && data.kind === "message") {
-    const threadId = data.dedupe_key?.startsWith("msg:") ? data.dedupe_key.split(":")[1] : null;
-    if (threadId) router.push({ pathname: "/thread/[id]", params: { id: threadId } });
-    else router.push("/messages");
-  } else if (data.type === "notification" && data.reservation_id) {
-    router.push({ pathname: "/reservations", params: { id: data.reservation_id } });
-  } else {
-    router.push("/notifications");
-  }
+  router.push(pushTarget(data));
 }
 
 /** Opens the right screen when someone taps an alert, including the one that launched the app. */

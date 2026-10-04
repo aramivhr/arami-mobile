@@ -77,3 +77,8 @@ export function dateTime(iso: string) {
     d.getMinutes(),
   ).padStart(2, "0")}`;
 }
+
+/** The date in Dubai (UTC+4 all year, no daylight saving), where the business and its backend jobs run. */
+export function dubaiISO(d: Date = new Date()) {
+  return new Date(d.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
+}

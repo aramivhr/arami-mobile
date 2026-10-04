@@ -6,19 +6,13 @@ import { Button, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { useMarkAllRead, useMarkRead, useNotifications, useReservations } from "@/hooks/data";
 import { RequireScreen } from "@/components/RequireScreen";
-import { timeAgo, toISO } from "@/lib/dates";
+import { timeAgo } from "@/lib/dates";
+import { isLastMinute, notificationTarget } from "@/lib/notify";
 import { useColors } from "@/lib/theme";
-import type { AppNotification, Reservation } from "@/lib/types";
+import type { AppNotification } from "@/lib/types";
 
 // The website's notification list (new, changed and cancelled reservations and
 // guest messages). Same-day bookings are labelled "Last Minute Reservation".
-
-export function isLastMinute(n: AppNotification, reservations: Reservation[]) {
-  if (n.kind !== "new" || !n.reservation_id) return false;
-  const r = reservations.find((x) => x.id === n.reservation_id);
-  // Booked for the same day it was made.
-  return !!r && r.check_in === toISO(new Date(n.created_at));
-}
 
 export default function NotificationsRoute() {
   return (
@@ -39,13 +33,7 @@ function NotificationsScreen() {
 
   const open = (n: AppNotification) => {
     if (!n.read) markRead.mutate(n.id);
-    if (n.kind === "message") {
-      const threadId = n.dedupe_key?.startsWith("msg:") ? n.dedupe_key.split(":")[1] : null;
-      if (threadId) router.push({ pathname: "/thread/[id]", params: { id: threadId } });
-      else router.push("/messages");
-    } else {
-      router.push(n.reservation_id ? { pathname: "/reservations", params: { id: n.reservation_id } } : "/reservations");
-    }
+    router.push(notificationTarget(n));
   };
 
   const meta = {

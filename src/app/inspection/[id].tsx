@@ -29,6 +29,7 @@ import {
   type Draft,
 } from "@/hooks/inspections";
 import { inspectionReportHtml } from "@/lib/inspectionReport";
+import { applyResult, keyOf, markRestOk, progress } from "@/lib/inspectionDraft";
 import { supabase } from "@/lib/supabase";
 import { dateTime, prettyDate } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
@@ -53,7 +54,6 @@ const CONDITIONS: { key: ItemCondition; label: string }[] = [
   { key: "missing", label: "Missing" },
 ];
 
-const keyOf = (room: string, item: string) => `${room}|${item}`;
 
 function fromServer(insp: Inspection, userId: string | null): Draft {
   return {
@@ -117,9 +117,8 @@ function InspectionScreen() {
     return [...seen].map(([room, items]) => ({ room, items }));
   }, [tplQ.data, draft?.results]);
 
-  const total = rooms.reduce((n, r) => n + r.items.length, 0);
+  const { total, checked } = progress(rooms, draft?.results ?? []);
   const byKey = useMemo(() => new Map((draft?.results ?? []).map((r) => [keyOf(r.room, r.item), r])), [draft?.results]);
-  const checked = rooms.reduce((n, r) => n + r.items.filter((i) => byKey.has(keyOf(r.room, i))).length, 0);
   const prevByKey = useMemo(() => new Map((prevQ.data?.results ?? []).map((r) => [keyOf(r.room, r.item), r])), [prevQ.data]);
 
   const update = useCallback(
@@ -139,21 +138,9 @@ function InspectionScreen() {
   );
 
   const setResult = (room: string, item: string, patch: Partial<InspectionResult>) =>
-    update((d) => {
-      const k = keyOf(room, item);
-      const existing = d.results.find((r) => keyOf(r.room, r.item) === k);
-      const results = existing
-        ? d.results.map((r) => (keyOf(r.room, r.item) === k ? { ...r, ...patch } : r))
-        : [...d.results, { room, item, condition: "ok" as ItemCondition, note: "", photos: [], ...patch }];
-      return { ...d, results };
-    });
+    update((d) => ({ ...d, results: applyResult(d.results, room, item, patch) }));
 
-  const allOk = (room: string, items: string[]) =>
-    update((d) => {
-      const have = new Set(d.results.filter((r) => r.room === room).map((r) => r.item));
-      const added = items.filter((i) => !have.has(i)).map((item) => ({ room, item, condition: "ok" as ItemCondition, note: "", photos: [] }));
-      return { ...d, results: [...d.results, ...added] };
-    });
+  const allOk = (room: string, items: string[]) => update((d) => ({ ...d, results: markRestOk(d.results, room, items) }));
 
   const addPhoto = async (room: string, item: string, source: "camera" | "library") => {
     try {
@@ -164,7 +151,7 @@ function InspectionScreen() {
       const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.8 };
       const res = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       if (res.canceled || !res.assets?.[0]) return;
-      const uri = await keepPhoto(res.assets[0].uri);
+      const uri = await keepPhoto(id!, res.assets[0].uri);
       const cur = byKey.get(keyOf(room, item));
       setResult(room, item, { photos: [...(cur?.photos ?? []), uri] });
     } catch (e) {

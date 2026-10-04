@@ -39,3 +39,17 @@ export function canSeeScreen(type: UserType | undefined, screen: ScreenKey) {
 export function getsPushAlerts(type: UserType | undefined) {
   return type === "admin" || type === "super_admin";
 }
+
+/** Same rule as the website's useUserType: super_admin beats admin; anyone else is an owner. */
+export function userTypeFromRoles(rows: { role: string }[] | null | undefined): UserType {
+  const roles = (rows || []).map((r) => r.role);
+  if (roles.includes("super_admin")) return "super_admin";
+  if (roles.includes("admin")) return "admin";
+  return "owner";
+}
+
+/** Same rule as the website's login page: a bare username means username@arami.app. */
+export function loginEmail(identifier: string) {
+  const id = identifier.toLowerCase().trim();
+  return id.includes("@") ? id : `${id}@arami.app`;
+}
