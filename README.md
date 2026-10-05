@@ -25,7 +25,7 @@ The tab table lives in `src/lib/access.ts`; add new user types there.
 - Notifications list with "Last Minute Reservation" for same-day bookings.
 - Inspections: a to-do list of every checkout (urgent when a guest arrives the same day), a room-by-room checklist with notes and photos, an AI-written report, Finish (damaged or missing items create a task and alert super admins), Previous inspections filtered by unit and dates, and a shareable PDF. Works offline: changes are saved on the phone and upload when there's a connection.
 - Phone alerts for admins and super admins (owners never get them), with an on/off switch per alert type.
-- Financial is still a placeholder.
+- Financial (owners and super admins with "show financial", as on the website): revenue pro-rated to the period, check-ins, occupancy, totals by channel and direct payment method, and each reservation's share.
 
 ## Run it
 
@@ -74,13 +74,14 @@ The app uses the website's Supabase (Lovable Cloud). Its own data lives only in
 
 ## Tests
 
-`npm test` runs 10,589 generated test cases (seeded, so the same every run):
+`npm test` runs 12,289 generated test cases (seeded, so the same every run):
 
 - the app's access, login, overlap check and change summaries against the website's own code
   (copied read-only into `tests/web` by `npm run test:web-refresh`);
 - dates, Last Minute labels and alert taps;
 - the checklist and the website's `mobile-inspection-complete` function;
 - the inspection PDF (escaping, counts);
+- the Financial numbers and quick date ranges against the website's Financial page;
 - 1,000 offline scenarios (lost connection, failed uploads, edits during upload, Finish);
 - 1,000 runs of the website's `mobile-push-dispatch` function, checking who gets which alert.
 

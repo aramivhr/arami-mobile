@@ -233,3 +233,15 @@ export function useMarkAllRead() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 }
+
+/** Contract end dates per unit, used by the Financial page (same query as the website). */
+export function useApartmentFinance() {
+  return useQuery({
+    queryKey: ["apartment_finance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("apartment_finance").select("apartment_id, contract_end");
+      if (error) throw error;
+      return (data ?? []) as { apartment_id: string; contract_end: string | null }[];
+    },
+  });
+}
