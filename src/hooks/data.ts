@@ -269,6 +269,24 @@ export function useNotifications() {
   });
 }
 
+/**
+ * Unread notifications counted on the server, as the website's bell does. The
+ * list above holds only the newest 100, so counting it would stop at 100.
+ */
+export function useUnreadCount() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["notifications", "unread-count"],
+    enabled: !!user,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<number> => {
+      const { count, error } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
 export function useMarkRead() {
   const qc = useQueryClient();
   return useMutation({

@@ -77,3 +77,4 @@ writeFileSync(
   "tests/web/messages-api.ts",
   header + msgApi.slice(msgApi.indexOf("export interface Thread"), msgApi.indexOf("export interface Msg")) + msgApi.slice(msgApi.indexOf("const words =")),
 );
+writeFileSync("tests/web/sync-alert-core.ts", header + show("supabase/functions/_shared/sync-alert-core.ts"));
