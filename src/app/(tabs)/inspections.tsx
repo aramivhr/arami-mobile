@@ -7,6 +7,8 @@ import { Badge, Card, Empty, PageHeader, Select, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { RangePicker } from "@/components/RangePicker";
 import { RequireScreen } from "@/components/RequireScreen";
+import { useAuth } from "@/hooks/auth";
+import { nameOf, useIsSuperAdmin, useStaffNames } from "@/hooks/staff";
 import { useInspections, usePendingCount, useUnitLabel, type InspectionFilters } from "@/hooks/inspections";
 import { prettyDate, toISO, todayISO } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
@@ -36,6 +38,10 @@ function InspectionsScreen() {
   const units = useUnitLabel();
   const items = q.data ?? [];
   const today = todayISO();
+  // Super admins see who submitted each inspection.
+  const { user } = useAuth();
+  const superAdmin = useIsSuperAdmin();
+  const names = useStaffNames(superAdmin).data;
 
   return (
     <Screen onRefresh={() => q.refetch()} refreshing={q.isRefetching}>
@@ -99,7 +105,7 @@ function InspectionsScreen() {
       ) : (
         <View style={{ gap: 10 }}>
           {items.map((i) => (
-            <InspectionCard key={i.id} insp={i} unit={units.label(i.apartment_id)} today={today} />
+            <InspectionCard key={i.id} insp={i} unit={units.label(i.apartment_id)} today={today} by={superAdmin ? nameOf(names, i.inspector_id, user?.id) : null} />
           ))}
         </View>
       )}
@@ -107,7 +113,7 @@ function InspectionsScreen() {
   );
 }
 
-function InspectionCard({ insp, unit, today }: { insp: Inspection; unit: string; today: string }) {
+function InspectionCard({ insp, unit, today, by }: { insp: Inspection; unit: string; today: string; by: string | null }) {
   const c = useColors();
   const done = insp.status === "completed";
   const overdue = !done && insp.due_date < today;
@@ -149,6 +155,11 @@ function InspectionCard({ insp, unit, today }: { insp: Inspection; unit: string;
         {done && insp.completed_at && (
           <Text muted size={12}>
             · completed {prettyDate(toISO(new Date(insp.completed_at)))}
+          </Text>
+        )}
+        {by && !!insp.inspector_id && (
+          <Text muted size={12}>
+            · {done ? "submitted" : "started"} by {by}
           </Text>
         )}
       </View>
