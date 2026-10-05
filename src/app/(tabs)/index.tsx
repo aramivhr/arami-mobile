@@ -8,7 +8,7 @@ import { StatusBadge, withAlpha } from "@/components/badges";
 import { useApartments, useBlockedDates, useBuildings, useReservations } from "@/hooks/data";
 import { useMyPermissions } from "@/hooks/permissions";
 import { addDays, toISO } from "@/lib/dates";
-import { UPCOMING_DAYS, upcomingReservations } from "@/lib/upcoming";
+import { UPCOMING_DAYS, receivedAt, receivedToday, upcomingReservations } from "@/lib/upcoming";
 import { useColors } from "@/lib/theme";
 import type { Reservation } from "@/lib/types";
 
@@ -35,6 +35,7 @@ export default function Dashboard() {
   const reservations = reservationsQ.data ?? [];
   const blockedDates = blockedQ.data ?? [];
   const [active, setActive] = useState<ActivityType | null>(null);
+  const [todayOpen, setTodayOpen] = useState(false);
   const showFinancial = perms?.show_financial ?? false;
   const showContacts = perms?.show_contacts ?? false;
 
@@ -51,6 +52,8 @@ export default function Dashboard() {
   }, [apartments, blockedDates, today]);
 
   const activeBookings = reservations.filter((r) => r.status === "confirmed" || r.status === "checked-in").length;
+  // Reservations received today (Dubai day), the website's "Today's Reservations" card.
+  const received = useMemo(() => receivedToday(reservations), [reservations]);
 
   const activity = useMemo(() => {
     const f = (date: string, field: "check_in" | "check_out") => reservations.filter((r) => r[field] === date && r.status !== "cancelled");
@@ -94,12 +97,13 @@ export default function Dashboard() {
     { key: "tomorrow-checkout", label: "Tomorrow's Check-outs", Icon: LogOut, color: "#e11d48" },
   ];
 
-  const ReservationRow = ({ r }: { r: Reservation }) => {
+  const ReservationRow = ({ r, showReceived }: { r: Reservation; showReceived?: boolean }) => {
     const { apt, bld } = aptInfo(r.apartment_id);
     return (
       <Pressable
         onPress={() => {
           setActive(null);
+          setTodayOpen(false);
           router.push({ pathname: "/reservation/[id]", params: { id: r.id } });
         }}
         style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 12, gap: 4, opacity: pressed ? 0.6 : 1 })}
@@ -113,6 +117,7 @@ export default function Dashboard() {
         <Text muted size={12}>
           {apt?.name} · {bld?.name}
           {showContacts && r.guest_phone ? ` · ${r.guest_phone}` : ""}
+          {showReceived ? ` · received ${receivedAt(r.created_at)}` : ""}
         </Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
           <Text size={12}>
@@ -134,7 +139,7 @@ export default function Dashboard() {
 
       <View style={{ flexDirection: "row", gap: 8 }}>
         <StatCard title="Buildings" value={buildings.length} subtitle={`${activeApartments.length} apartments`} Icon={Building2} />
-        <StatCard title="Active Bookings" value={activeBookings} Icon={CalendarDays} />
+        <StatCard title="Today's Reservations" value={received.length} subtitle={`${activeBookings} active bookings`} Icon={CalendarDays} onPress={() => setTodayOpen(true)} />
         <StatCard title="Available Units" value={available.length} Icon={Home} />
       </View>
 
@@ -224,14 +229,29 @@ export default function Dashboard() {
           {active && activity[active].length === 0 && <Empty>No reservations</Empty>}
         </Card>
       </Sheet>
+
+      <Sheet open={todayOpen} onClose={() => setTodayOpen(false)} title="Today's Reservations">
+        <Text muted size={12}>
+          Reservations received today (Dubai time). Tap one to open it.
+        </Text>
+        <Card>
+          {received.map((r, i) => (
+            <View key={r.id}>
+              {i > 0 && <Divider />}
+              <ReservationRow r={r} showReceived />
+            </View>
+          ))}
+          {received.length === 0 && <Empty>No reservations received today</Empty>}
+        </Card>
+      </Sheet>
     </Screen>
   );
 }
 
-function StatCard({ title, value, subtitle, Icon }: { title: string; value: number; subtitle?: string; Icon: typeof Home }) {
+function StatCard({ title, value, subtitle, Icon, onPress }: { title: string; value: number; subtitle?: string; Icon: typeof Home; onPress?: () => void }) {
   const c = useColors();
   return (
-    <Card style={{ flex: 1, padding: 10, gap: 6 }}>
+    <Card onPress={onPress} style={{ flex: 1, padding: 10, gap: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
         <Text muted weight="medium" size={10} style={{ flex: 1 }} numberOfLines={2}>
           {title}

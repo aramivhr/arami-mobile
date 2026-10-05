@@ -5,6 +5,7 @@ import { findThreadForReservation } from "@/lib/threads";
 import { notificationTarget, pushTarget } from "@/lib/notify";
 import { confirmationHtml } from "@/lib/confirmation";
 import { formatAmount } from "@/lib/dates";
+import { receivedAt, receivedToday } from "@/lib/upcoming";
 import * as web from "./web/overbookings";
 import * as webAlert from "./web/new-booking-alert";
 import * as webMsg from "./web/messages-api";
@@ -171,5 +172,22 @@ describe("Receipt and amounts follow the website", () => {
   });
   it.each([[1234.5, "1,234.5"], [900, "900"], [0, "0"], [null, "0"], ["12.345", "12.35"], ["abc", "abc"]] as const)("formatAmount(%s)", (v, out) => {
     expect(formatAmount(v)).toBe(out);
+  });
+});
+
+describe("Today's Reservations card matches the website Dashboard (faf3f1f)", () => {
+  const dubaiDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(d);
+  const webReceived = (d: Date) =>
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dubai", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(d);
+  const rCases = cases(500, 504, (r) => {
+    const now = Date.UTC(2026, r.int(0, 11), r.int(1, 28), r.int(0, 23), r.int(0, 59));
+    const created = Array.from({ length: r.int(0, 6) }, () => (r.bool(0.1) ? null : new Date(now + r.int(-30, 30) * 3600_000 + r.int(0, 59) * 60_000).toISOString()));
+    return { now, created };
+  });
+  it.each(rCases)("%s", (_l, c) => {
+    const list = c.created.map((created_at, i) => ({ id: `r${i}`, created_at: created_at ?? undefined }));
+    const web = list.filter((x) => x.created_at && dubaiDay(new Date(x.created_at)) === dubaiDay(new Date(c.now)));
+    expect(receivedToday(list, new Date(c.now)).map((x) => x.id)).toEqual(web.map((x) => x.id));
+    for (const x of list) if (x.created_at) expect(receivedAt(x.created_at)).toBe(webReceived(new Date(x.created_at)));
   });
 });
