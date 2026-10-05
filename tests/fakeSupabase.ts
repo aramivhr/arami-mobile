@@ -61,6 +61,22 @@ export class FakeSupabase {
     }),
   };
 
+  /** Database functions callable with rpc(); a missing one fails as it does before Lovable adds it. */
+  rpcHandlers: Record<string, (args: any) => any> = {};
+  rpcCalls: { name: string; args: any }[] = [];
+
+  async rpc(name: string, args: any = {}) {
+    try {
+      this.check("rpc");
+    } catch (e) {
+      return { data: null, error: { message: (e as Error).message } };
+    }
+    this.rpcCalls.push({ name, args });
+    const fn = this.rpcHandlers[name];
+    if (!fn) return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name}` } };
+    return { data: await fn(args), error: null };
+  }
+
   functions = {
     invoke: async (name: string, { body }: { body: any }) => {
       try {

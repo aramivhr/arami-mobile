@@ -11,6 +11,7 @@ import { Badge, Button, Card, Input, Label, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { RequireScreen } from "@/components/RequireScreen";
 import { useAuth } from "@/hooks/auth";
+import { nameOf, useIsSuperAdmin, useStaffNames } from "@/hooks/staff";
 import {
   issuesOf,
   keepPhoto,
@@ -76,6 +77,9 @@ function InspectionScreen() {
   const prevQ = usePreviousInspection(insp);
   const units = useUnitLabel();
   const unit = insp ? units.label(insp.apartment_id) : "";
+  // Super admins see who submitted (or started) the inspection.
+  const superAdmin = useIsSuperAdmin();
+  const names = useStaffNames(superAdmin).data;
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hasLocal, setHasLocal] = useState(false);
@@ -184,7 +188,8 @@ function InspectionScreen() {
     const missing = total - checked;
     const go = async () => {
       if (!id || !draft) return;
-      const next = { ...draft, complete: true };
+      // Whoever presses Finish is recorded as the one who submitted it.
+      const next = { ...draft, complete: true, inspector_id: user?.id ?? draft.inspector_id };
       setDraft(next);
       setHasLocal(true);
       await saveDraft(id, next);
@@ -218,6 +223,8 @@ function InspectionScreen() {
   const finishing = draft.complete;
   const readOnly = done || finishing;
   const issues = issuesOf(draft.results);
+  // A saved inspection's submitter is what Supabase has; one finishing on this phone is yours.
+  const submitter = done ? insp.inspector_id : draft.inspector_id;
 
   return (
     <Screen onRefresh={hasLocal ? undefined : () => q.refetch().then((r) => r.data && setDraft(fromServer(r.data, user?.id ?? null)))} refreshing={q.isRefetching}>
@@ -245,6 +252,11 @@ function InspectionScreen() {
             Completed {dateTime(insp.completed_at)}
           </Text>
         )}
+        {superAdmin && !!insp.inspector_id && (
+          <Text muted size={12}>
+            {done ? "Submitted by" : "Started by"} {nameOf(names, insp.inspector_id, user?.id)}
+          </Text>
+        )}
         {!readOnly && (
           <View style={{ gap: 6, marginTop: 4 }}>
             <View style={{ height: 6, borderRadius: 3, backgroundColor: c.muted, overflow: "hidden" }}>
@@ -257,7 +269,7 @@ function InspectionScreen() {
         )}
       </Card>
 
-      {readOnly && <ReportView insp={insp} draft={draft} unit={unit} />}
+      {readOnly && <ReportView insp={insp} draft={draft} unit={unit} inspectedBy={superAdmin && submitter ? nameOf(names, submitter, user?.id) : null} />}
 
       {!readOnly &&
         rooms.map(({ room, items }) => {
@@ -457,7 +469,7 @@ function PhotoButton({ Icon, label, onPress }: { Icon: typeof Camera; label: str
 }
 
 /** The saved report: summary, items needing attention with photos, notes, and Share PDF. */
-function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; unit: string }) {
+function ReportView({ insp, draft, unit, inspectedBy }: { insp: Inspection; draft: Draft; unit: string; inspectedBy: string | null }) {
   const c = useColors();
   const tplQ = useTemplate(insp.template_id);
   const [sharing, setSharing] = useState(false);
@@ -471,7 +483,7 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
     try {
       // Photos are embedded in the PDF itself, including ones still on the phone.
       const photoUrls = await photoDataUris(draft.results.flatMap((r) => r.photos));
-      const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls });
+      const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls, inspectedBy });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Inspection ${unit}`, UTI: "com.adobe.pdf" });

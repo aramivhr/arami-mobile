@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invokeFunction } from "@/lib/supabase";
+import { useAuth } from "@/hooks/auth";
+import { recordSender } from "@/hooks/staff";
 import type { Thread, ThreadMessage } from "@/lib/types";
 
 // Guest messaging through the website's existing channex-messages function
@@ -57,8 +59,14 @@ export function useThreadMessages(threadId: string | undefined) {
 
 export function useSendMessage(threadId: string) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
-    mutationFn: (text: string) => invokeFunction("channex-messages", { action: "send", thread_id: threadId, text }),
+    mutationFn: async (text: string) => {
+      const res = await invokeFunction("channex-messages", { action: "send", thread_id: threadId, text });
+      // Channex doesn't say which staff member replied; note it for super admins.
+      await recordSender(threadId, text, user?.id);
+      return res;
+    },
     onMutate: (text: string) => {
       // Show the reply instantly; the next refresh replaces it with the real one.
       qc.setQueryData<{ messages: ThreadMessage[] }>(["msg-thread", threadId], (old) => ({
@@ -68,6 +76,7 @@ export function useSendMessage(threadId: string) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["msg-thread", threadId] });
       qc.invalidateQueries({ queryKey: ["msg-threads"] });
+      qc.invalidateQueries({ queryKey: ["msg-senders", threadId] });
     },
   });
 }
