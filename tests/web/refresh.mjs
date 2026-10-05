@@ -69,3 +69,12 @@ writeFileSync("tests/web/mobile-inspection-complete.ts", header + show("supabase
 console.log("web oracle refreshed from", commit);
 const guestFields = show("src/components/GuestCountFields.tsx");
 writeFileSync("tests/web/guests.ts", header + take(guestFields, "export function guestCountsPayload") + "\n");
+writeFileSync("tests/web/overbookings.ts", header + show("src/lib/overbookings.ts"));
+const nba = show("src/lib/new-booking-alert.ts");
+writeFileSync("tests/web/new-booking-alert.ts", header + nba.slice(0, nba.indexOf("// ---- Sound ----")));
+const msgApi = show("src/lib/messages-api.ts");
+writeFileSync(
+  "tests/web/messages-api.ts",
+  header + msgApi.slice(msgApi.indexOf("export interface Thread"), msgApi.indexOf("export interface Msg")) + msgApi.slice(msgApi.indexOf("const words =")),
+);
+writeFileSync("tests/web/sync-alert-core.ts", header + show("supabase/functions/_shared/sync-alert-core.ts"));

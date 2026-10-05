@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { Text } from "@/components/ui";
 import { useColors } from "@/lib/theme";
-import { useNotifications } from "@/hooks/data";
+import { useUnreadCount } from "@/hooks/data";
 import { useUserType } from "@/hooks/permissions";
 import { canSeeScreen } from "@/lib/access";
 
@@ -54,9 +54,8 @@ export function HeaderBell() {
   const c = useColors();
   const { data: type } = useUserType();
   const allowed = canSeeScreen(type, "notifications");
-  const { data = [] } = useNotifications();
+  const { data: unread = 0 } = useUnreadCount();
   if (!allowed) return null;
-  const unread = data.filter((n) => !n.read).length;
   return (
     <Pressable onPress={() => router.push("/notifications")} hitSlop={10} style={{ padding: 6, marginRight: 8 }} accessibilityLabel="Notifications">
       <Bell size={20} color={c.foreground} />

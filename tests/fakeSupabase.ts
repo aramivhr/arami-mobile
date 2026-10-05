@@ -99,12 +99,14 @@ export class FakeSupabase {
 
     if (q.op === "select") {
       let out = rows.filter(match);
+      if (q.head) return { data: null, error: null, count: out.length };
+      const total = out.length;
       for (const [col, asc] of q.orders) {
         out = [...out].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] ?? "") < (b[col] ?? "") ? (asc ? -1 : 1) : asc ? 1 : -1));
       }
       if (q.limitN != null) out = out.slice(0, q.limitN);
       out = out.map((r) => this.project(q, r));
-      return this.shape(q, out);
+      return this.shape(q, out, q.countExact ? total : undefined);
     }
     if (q.op === "update") {
       const hit = rows.filter(match);
@@ -128,7 +130,7 @@ export class FakeSupabase {
       );
       if (clash) {
         if (q.op === "upsert" && !q.ignoreDuplicates) Object.assign(clash, row);
-        else if (q.op === "insert") return { data: null, error: { message: "duplicate key value violates unique constraint" } };
+        else if (q.op === "insert") return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
         continue;
       }
       row.id ??= this.nextId();
@@ -176,7 +178,12 @@ export class Query implements PromiseLike<any> {
     _opts: FakeOptions,
   ) {}
 
-  select(cols = "*") {
+  countExact = false;
+  head = false;
+
+  select(cols = "*", o: { count?: string; head?: boolean } = {}) {
+    if (o.count === "exact") this.countExact = true;
+    if (o.head) this.head = true;
     if (this.op === "select") this.columns = cols;
     else this.returning = true;
     return this;

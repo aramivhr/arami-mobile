@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { router } from "expo-router";
 import { MessageSquare, Search } from "lucide-react-native";
 import { Input, Text } from "@/components/ui";
 import { KindBadge, SourceBadge, withAlpha } from "@/components/badges";
-import { kindLabel, providerSource, threadName, useSeen, useThreads } from "@/hooks/messages";
+import { kindLabel, preloadRecentThreads, providerSource, threadName, useSeen, useThreads } from "@/hooks/messages";
 import { timeAgo } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
 import type { Thread } from "@/lib/types";
@@ -16,6 +17,14 @@ export default function MessagesScreen() {
   const { seen } = useSeen();
   const [search, setSearch] = useState("");
   const threads = threadsQ.data?.threads ?? [];
+  const qc = useQueryClient();
+
+  // Preload the newest conversations, a few at a time, so opening one is instant.
+  const recentKey = threads.slice(0, 8).map((t) => t.id + t.last_message_at).join();
+  useEffect(() => {
+    if (threads.length) void preloadRecentThreads(qc, threads);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentKey, qc]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

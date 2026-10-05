@@ -1,7 +1,7 @@
 import React from "react";
 import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { router } from "expo-router";
-import { CalendarPlus, CalendarX, MessageSquare, Pencil } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, CalendarX, MessageSquare, Pencil } from "lucide-react-native";
 import { Button, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { useMarkAllRead, useMarkRead, useNotifications, useReservations } from "@/hooks/data";
@@ -12,7 +12,9 @@ import { useColors } from "@/lib/theme";
 import type { AppNotification } from "@/lib/types";
 
 // The website's notification list (new, changed and cancelled reservations and
-// guest messages). Same-day bookings are labelled "Last Minute Reservation".
+// guest messages, plus channel-sync problems such as an overbooking, which the
+// website labels "Needs attention"). Same-day bookings are labelled "Last
+// Minute Reservation".
 
 export default function NotificationsRoute() {
   return (
@@ -41,6 +43,7 @@ function NotificationsScreen() {
     modified: { Icon: Pencil, color: c.accent },
     cancelled: { Icon: CalendarX, color: c.destructive },
     message: { Icon: MessageSquare, color: c.emerald },
+    alert: { Icon: AlertTriangle, color: c.destructive },
   };
 
   return (
@@ -80,6 +83,11 @@ function NotificationsScreen() {
                 <Icon size={17} color={color} />
               </View>
               <View style={{ flex: 1, gap: 3 }}>
+                {n.kind === "alert" && (
+                  <Text weight="bold" size={11} style={{ color: c.destructive, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                    Needs attention
+                  </Text>
+                )}
                 {lastMinute && (
                   <Text weight="bold" size={11} style={{ color: c.destructive, letterSpacing: 0.5, textTransform: "uppercase" }}>
                     Last Minute Reservation
@@ -93,7 +101,7 @@ function NotificationsScreen() {
                     {timeAgo(n.created_at)}
                   </Text>
                 </View>
-                <Text muted size={12} numberOfLines={4}>
+                <Text muted size={12} numberOfLines={n.kind === "alert" ? 8 : 4}>
                   {n.body}
                 </Text>
               </View>
