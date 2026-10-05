@@ -22,7 +22,7 @@ export function threadIdFromDedupe(key: string | null | undefined): string | nul
 
 export type Target =
   | { pathname: "/thread/[id]"; params: { id: string } }
-  | { pathname: "/reservations"; params: { id: string } }
+  | { pathname: "/reservation/[id]"; params: { id: string } }
   | { pathname: "/inspection/[id]"; params: { id: string } }
   | "/messages"
   | "/reservations"
@@ -34,7 +34,7 @@ export function notificationTarget(n: Pick<AppNotification, "kind" | "reservatio
     const id = threadIdFromDedupe(n.dedupe_key);
     return id ? { pathname: "/thread/[id]", params: { id } } : "/messages";
   }
-  return n.reservation_id ? { pathname: "/reservations", params: { id: n.reservation_id } } : "/reservations";
+  return n.reservation_id ? { pathname: "/reservation/[id]", params: { id: n.reservation_id } } : "/reservations";
 }
 
 export type PushData = {

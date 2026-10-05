@@ -118,6 +118,8 @@ export interface InspectionResult {
   note: string;
   /** Storage paths in the mobile-inspection-photos bucket. */
   photos: string[];
+  /** Keys and access cards: how many were handed back (0 = this unit has none). */
+  count?: number | null;
 }
 
 export interface InspectionTemplate {

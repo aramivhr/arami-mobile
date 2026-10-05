@@ -59,6 +59,7 @@ function SignedIn() {
         <Stack.Screen name="thread/[id]" options={{ title: "Conversation" }} />
         <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
         <Stack.Screen name="reservations" options={{ title: "" }} />
+        <Stack.Screen name="reservation/[id]" options={{ title: "Reservation" }} />
         <Stack.Screen name="financial" options={{ title: "" }} />
         <Stack.Screen name="inspection/[id]" options={{ title: "Inspection" }} />
         <Stack.Screen name="alert-settings" options={{ title: "Phone alerts" }} />

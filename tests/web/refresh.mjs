@@ -67,3 +67,5 @@ writeFileSync(
 writeFileSync("tests/web/mobile-push-dispatch.ts", header + show("supabase/functions/mobile-push-dispatch/index.ts"));
 writeFileSync("tests/web/mobile-inspection-complete.ts", header + show("supabase/functions/mobile-inspection-complete/index.ts"));
 console.log("web oracle refreshed from", commit);
+const guestFields = show("src/components/GuestCountFields.tsx");
+writeFileSync("tests/web/guests.ts", header + take(guestFields, "export function guestCountsPayload") + "\n");

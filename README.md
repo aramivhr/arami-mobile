@@ -74,13 +74,14 @@ The app uses the website's Supabase (Lovable Cloud). Its own data lives only in
 
 ## Tests
 
-`npm test` runs 12,289 generated test cases (seeded, so the same every run):
+`npm test` runs 15,390 generated test cases (seeded, so the same every run):
 
 - the app's access, login, overlap check and change summaries against the website's own code
   (copied read-only into `tests/web` by `npm run test:web-refresh`);
 - dates, Last Minute labels and alert taps;
 - the checklist and the website's `mobile-inspection-complete` function;
-- the inspection PDF (escaping, counts);
+- the inspection PDF (escaping, counts, the keys and access cards section) and photos embedded in it;
+- the Upcoming Reservations window, the reservation confirmation PDF and new-booking guest counts;
 - the Financial numbers and quick date ranges against the website's Financial page;
 - 1,000 offline scenarios (lost connection, failed uploads, edits during upload, Finish);
 - 1,000 runs of the website's `mobile-push-dispatch` function, checking who gets which alert.

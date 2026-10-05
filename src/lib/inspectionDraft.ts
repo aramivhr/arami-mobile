@@ -40,3 +40,25 @@ export const hasDamage = (results: InspectionResult[]) => results.some((r) => r.
 
 /** Items marked damaged, missing or dirty. */
 export const issuesOf = (results: InspectionResult[]) => results.filter((r) => r.condition !== "ok");
+
+/** The keys and access cards handed back at checkout, checked as their own section. */
+export const KEYS_ROOM = "Keys and access cards";
+export const KEYS_ITEMS = ["Apartment keys", "Access cards", "Parking card / remote", "Mailbox key"];
+
+const isKeyItem = (item: string) => /\bkeys?\b|access card/i.test(item);
+
+/**
+ * The checklist rooms with the keys and access cards section first. Key items the
+ * template lists in other rooms (the default template has "Keys / access cards"
+ * under Entrance) move into it, so they are checked once.
+ */
+export function withKeysSection(rooms: { room: string; items: string[] }[]): { room: string; items: string[] }[] {
+  const isKeysRoom = (r: { room: string }) => r.room.trim().toLowerCase() === KEYS_ROOM.toLowerCase();
+  const existing = rooms.filter(isKeysRoom);
+  const rest = rooms
+    .filter((r) => !isKeysRoom(r))
+    .map((r) => ({ room: r.room, items: r.items.filter((i) => !isKeyItem(i)) }))
+    .filter((r) => r.items.length > 0);
+  const items = [...new Set([...existing.flatMap((r) => r.items), ...KEYS_ITEMS])];
+  return [{ room: KEYS_ROOM, items }, ...rest];
+}

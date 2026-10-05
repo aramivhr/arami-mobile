@@ -214,23 +214,100 @@ async function forgetLocalPhotos(inspectionId: string, uris: Set<string>) {
   else await AsyncStorage.removeItem(KEPT_PREFIX + inspectionId);
 }
 
-/** Short-lived links for showing private photos. */
-export function usePhotoUrls(paths: string[]) {
-  const remote = paths.filter((p) => !isLocalPhoto(p));
+/**
+ * Where a photo can be read now. A phone copy is deleted once it has uploaded, so
+ * a screen or report still holding the phone path gets the uploaded file instead.
+ */
+async function resolvePhoto(p: string, uploaded: Record<string, string>): Promise<string | null> {
+  if (!isLocalPhoto(p)) return p;
+  if (Platform.OS === "web" || p.startsWith("data:")) return p;
+  try {
+    if (new File(p).exists) return p;
+  } catch {
+    // Not a file path we can check; fall through to the uploaded copy.
+  }
+  return uploaded[p] ?? null;
+}
+
+async function signedUrls(paths: string[]): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  if (!paths.length) return map;
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600);
+  if (error) throw error;
+  for (const d of data ?? []) if (d.path && d.signedUrl) map[d.path] = d.signedUrl;
+  return map;
+}
+
+/**
+ * Viewable links for an item's photos, phone copies and uploaded ones alike, in
+ * the same order as `paths`; null while a link loads or if a photo can't be found.
+ */
+export function usePhotoUrls(paths: string[]): (string | null)[] {
   const q = useQuery({
-    queryKey: ["photo-urls", remote],
-    enabled: remote.length > 0,
+    queryKey: ["photo-urls", paths],
+    enabled: paths.length > 0,
     staleTime: 30 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(remote, 3600);
-      if (error) throw error;
-      const map: Record<string, string> = {};
-      for (const d of data ?? []) if (d.path && d.signedUrl) map[d.path] = d.signedUrl;
-      return map;
+      const uploaded = await uploadedMap();
+      const resolved = await Promise.all(paths.map((p) => resolvePhoto(p, uploaded)));
+      const urls = await signedUrls([...new Set(resolved.filter((p): p is string => !!p && !isLocalPhoto(p)))]);
+      return Object.fromEntries(paths.map((p, i) => [p, !resolved[i] ? null : isLocalPhoto(resolved[i]!) ? resolved[i] : urls[resolved[i]!] ?? null]));
     },
+    placeholderData: (prev) => prev,
   });
-  const map = q.data ?? {};
-  return paths.map((p) => (isLocalPhoto(p) ? p : map[p])).filter(Boolean) as string[];
+  // Until the links are ready, phone photos show straight away.
+  const map = (q.data ?? {}) as Record<string, string | null>;
+  return paths.map((p) => map[p] ?? (isLocalPhoto(p) && Platform.OS === "web" ? p : null));
+}
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+export function toBase64(input: ArrayBuffer | Uint8Array): string {
+  const b = input instanceof Uint8Array ? input : new Uint8Array(input);
+  let out = "";
+  for (let i = 0; i < b.length; i += 3) {
+    const n = (b[i] << 16) | ((b[i + 1] ?? 0) << 8) | (b[i + 2] ?? 0);
+    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < b.length ? B64[(n >> 6) & 63] : "=") + (i + 2 < b.length ? B64[n & 63] : "=");
+  }
+  return out;
+}
+
+/**
+ * Every photo as an image embedded in the report, so the PDF has them even when
+ * the inspection hasn't uploaded yet, and doesn't depend on links loading while
+ * it prints. Photos that can't be read are left out.
+ */
+export async function photoDataUris(paths: string[]): Promise<Record<string, string>> {
+  const uploaded = await uploadedMap();
+  const unique = [...new Set(paths)];
+  const resolved = await Promise.all(unique.map((p) => resolvePhoto(p, uploaded)));
+  const urls = await signedUrls([...new Set(resolved.filter((p): p is string => !!p && !isLocalPhoto(p)))]).catch(() => ({}) as Record<string, string>);
+  const out: Record<string, string> = {};
+  await Promise.all(
+    unique.map(async (p, i) => {
+      const at = resolved[i];
+      if (!at) return;
+      try {
+        if (at.startsWith("data:")) {
+          out[p] = at;
+          return;
+        }
+        let bytes: ArrayBuffer;
+        if (isLocalPhoto(at) && Platform.OS !== "web") bytes = await new File(at).arrayBuffer();
+        else {
+          const url = isLocalPhoto(at) ? at : urls[at];
+          if (!url) return;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          bytes = await res.arrayBuffer();
+        }
+        out[p] = `data:image/jpeg;base64,${toBase64(bytes)}`;
+      } catch {
+        // Unreadable photo: the report still prints without it.
+      }
+    }),
+  );
+  return out;
 }
 
 // ---------- Sync ----------

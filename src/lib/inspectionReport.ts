@@ -1,6 +1,7 @@
 import { COMPANY_ADDRESS, COMPANY_NAME, COMPANY_PHONE, COMPANY_WEBSITE } from "@/lib/company";
 import { dateTime, prettyDate } from "@/lib/dates";
-import type { Inspection, InspectionTemplate } from "@/lib/types";
+import { KEYS_ROOM, withKeysSection } from "@/lib/inspectionDraft";
+import type { Inspection, InspectionResult, InspectionTemplate } from "@/lib/types";
 
 // HTML for the shareable inspection report PDF (printed with expo-print).
 
@@ -13,6 +14,15 @@ const CONDITION: Record<string, { label: string; color: string }> = {
   damaged: { label: "Damaged", color: "#dc2626" },
   missing: { label: "Missing", color: "#dc2626" },
 };
+
+/** "OK" / "Damaged" ..., with keys showing how many were handed back. */
+export function conditionText(r: Pick<InspectionResult, "room" | "condition" | "count">) {
+  const base = CONDITION[r.condition]?.label ?? r.condition;
+  if (r.room !== KEYS_ROOM) return base;
+  if (r.condition === "ok" && r.count === 0) return "None for this unit";
+  const label = r.condition === "ok" ? "Returned" : base;
+  return r.count != null ? `${label} (${r.count} handed back)` : label;
+}
 
 export function inspectionReportHtml({
   insp,
@@ -27,7 +37,9 @@ export function inspectionReportHtml({
   photoUrls: Record<string, string>;
 }) {
   const issues = insp.results.filter((r) => r.condition !== "ok");
-  const rooms = template?.rooms ?? [...new Set(insp.results.map((r) => r.room))].map((room) => ({ room, items: [] as string[] }));
+  const rooms = template?.rooms?.length
+    ? withKeysSection(template.rooms)
+    : [...new Set(insp.results.map((r) => r.room))].map((room) => ({ room, items: [] as string[] }));
 
   const issueRows = issues
     .map((r) => {
@@ -38,7 +50,7 @@ export function inspectionReportHtml({
         .map((u) => `<img src="${esc(u)}" />`)
         .join("");
       return `<div class="issue">
-        <div><b>${esc(r.room)} · ${esc(r.item)}</b> <span class="tag" style="color:${c.color};border-color:${c.color}">${c.label}</span></div>
+        <div><b>${esc(r.room)} · ${esc(r.item)}</b> <span class="tag" style="color:${c.color};border-color:${c.color}">${esc(conditionText(r))}</span></div>
         ${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
         ${photos ? `<div class="photos">${photos}</div>` : ""}
       </div>`;
@@ -52,7 +64,7 @@ export function inspectionReportHtml({
         .map((item) => {
           const r = insp.results.find((x) => x.room === room && x.item === item);
           const c = r ? CONDITION[r.condition] : null;
-          return `<tr><td>${esc(item)}</td><td style="color:${c?.color ?? "#64748b"}">${c?.label ?? "Not checked"}</td><td>${esc(r?.note)}</td></tr>`;
+          return `<tr><td>${esc(item)}</td><td style="color:${c?.color ?? "#64748b"}">${r ? esc(conditionText(r)) : "Not checked"}</td><td>${esc(r?.note)}</td></tr>`;
         })
         .join("");
       return `<h3>${esc(room)}</h3><table>${rows}</table>`;

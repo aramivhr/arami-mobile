@@ -12,12 +12,11 @@ import { withAlpha } from "@/components/badges";
 import { RequireScreen } from "@/components/RequireScreen";
 import { useAuth } from "@/hooks/auth";
 import {
-  PHOTO_BUCKET,
-  isLocalPhoto,
   issuesOf,
   keepPhoto,
   loadDraft,
   onInspectionSynced,
+  photoDataUris,
   saveDraft,
   syncInspections,
   useInspection,
@@ -28,9 +27,8 @@ import {
   writeSummary,
   type Draft,
 } from "@/hooks/inspections";
-import { inspectionReportHtml } from "@/lib/inspectionReport";
-import { applyResult, keyOf, markRestOk, progress } from "@/lib/inspectionDraft";
-import { supabase } from "@/lib/supabase";
+import { conditionText, inspectionReportHtml } from "@/lib/inspectionReport";
+import { KEYS_ROOM, applyResult, keyOf, markRestOk, progress, withKeysSection } from "@/lib/inspectionDraft";
 import { dateTime, prettyDate } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
 import type { Inspection, InspectionResult, ItemCondition } from "@/lib/types";
@@ -110,11 +108,11 @@ function InspectionScreen() {
   );
 
   const rooms = useMemo(() => {
-    if (tplQ.data?.rooms?.length) return tplQ.data.rooms;
+    if (tplQ.data?.rooms?.length) return withKeysSection(tplQ.data.rooms);
     // No template: show whatever rooms the results already have.
     const seen = new Map<string, string[]>();
     for (const r of draft?.results ?? []) seen.set(r.room, [...(seen.get(r.room) ?? []), r.item]);
-    return [...seen].map(([room, items]) => ({ room, items }));
+    return withKeysSection([...seen].map(([room, items]) => ({ room, items })));
   }, [tplQ.data, draft?.results]);
 
   const { total, checked } = progress(rooms, draft?.results ?? []);
@@ -152,8 +150,11 @@ function InspectionScreen() {
       const res = source === "camera" ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
       if (res.canceled || !res.assets?.[0]) return;
       const uri = await keepPhoto(id!, res.assets[0].uri);
-      const cur = byKey.get(keyOf(room, item));
-      setResult(room, item, { photos: [...(cur?.photos ?? []), uri] });
+      // Add to the item as it is now, not as it was when the camera opened.
+      update((d) => {
+        const cur = d.results.find((r) => r.room === room && r.item === item);
+        return { ...d, results: applyResult(d.results, room, item, { photos: [...(cur?.photos ?? []), uri] }) };
+      });
     } catch (e) {
       Alert.alert("Couldn't add the photo", (e as Error).message);
     }
@@ -283,6 +284,7 @@ function InspectionScreen() {
                     <ItemRow
                       key={item}
                       item={item}
+                      keys={room === KEYS_ROOM}
                       result={byKey.get(keyOf(room, item))}
                       previous={prevByKey.get(keyOf(room, item))}
                       onChange={(patch) => setResult(room, item, patch)}
@@ -334,14 +336,24 @@ function InspectionScreen() {
   );
 }
 
+const KEY_CHOICES: { key: string; label: string; patch: Partial<InspectionResult>; on: (r?: InspectionResult) => boolean }[] = [
+  { key: "ok", label: "Returned", patch: { condition: "ok" }, on: (r) => r?.condition === "ok" && r.count !== 0 },
+  { key: "none", label: "None", patch: { condition: "ok", count: 0 }, on: (r) => r?.condition === "ok" && r.count === 0 },
+  { key: "damaged", label: "Damaged", patch: { condition: "damaged" }, on: (r) => r?.condition === "damaged" },
+  { key: "missing", label: "Missing", patch: { condition: "missing" }, on: (r) => r?.condition === "missing" },
+];
+
 function ItemRow({
   item,
+  keys,
   result,
   previous,
   onChange,
   onAddPhoto,
 }: {
   item: string;
+  /** A key or access card: Returned / None / Damaged / Missing, and how many. */
+  keys?: boolean;
   result?: InspectionResult;
   previous?: InspectionResult;
   onChange: (patch: Partial<InspectionResult>) => void;
@@ -361,37 +373,60 @@ function ItemRow({
         </Text>
       )}
       <View style={{ flexDirection: "row", gap: 6 }}>
-        {CONDITIONS.map(({ key, label }) => {
-          const on = result?.condition === key;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => onChange({ condition: key })}
-              accessibilityLabel={`${item}: ${label}`}
-              style={{
-                flex: 1,
-                paddingVertical: 8,
-                borderRadius: 8,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: on ? color[key] : c.border,
-                backgroundColor: on ? withAlpha(color[key], 0.14) : c.card,
-              }}
-            >
-              <Text size={12} weight={on ? "semibold" : "regular"} style={on ? { color: color[key] } : undefined}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {(keys
+          ? KEY_CHOICES.map((k) => ({ ...k, on: k.on(result), tint: color[k.patch.condition!] }))
+          : CONDITIONS.map(({ key, label }) => ({ key, label, patch: { condition: key } as Partial<InspectionResult>, on: result?.condition === key, tint: color[key] }))
+        ).map(({ key, label, patch, on, tint }) => (
+          <Pressable
+            key={key}
+            onPress={() => onChange(keys && key !== "none" && result?.count === 0 ? { ...patch, count: null } : patch)}
+            accessibilityLabel={`${item}: ${label}`}
+            style={{
+              flex: 1,
+              paddingVertical: 8,
+              borderRadius: 8,
+              alignItems: "center",
+              borderWidth: 1,
+              borderColor: on ? tint : c.border,
+              backgroundColor: on ? withAlpha(tint, 0.14) : c.card,
+            }}
+          >
+            <Text size={12} weight={on ? "semibold" : "regular"} style={on ? { color: tint } : undefined}>
+              {label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
+      {keys && result && result.count !== 0 && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text muted size={13} style={{ flex: 1 }}>
+            How many handed back?
+          </Text>
+          <Input
+            value={result.count == null ? "" : String(result.count)}
+            onChangeText={(t) => {
+              const digits = t.replace(/[^0-9]/g, "");
+              onChange({ count: digits === "" ? null : Math.min(99, Number(digits)) });
+            }}
+            keyboardType="number-pad"
+            placeholder="0"
+            style={{ width: 70, textAlign: "center" }}
+          />
+        </View>
+      )}
       {(issue || !!result?.note || !!result?.photos.length) && (
         <>
           <Input value={result?.note ?? ""} onChangeText={(t) => onChange({ note: t })} placeholder="What's wrong?" />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {photos.map((u, i) => (
-              <View key={u}>
-                <Image source={{ uri: u }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted }} />
+              <View key={`${i}:${result?.photos[i]}`}>
+                {u ? (
+                  <Image source={{ uri: u }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted }} />
+                ) : (
+                  <View style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
+                    <ActivityIndicator size="small" color={c.mutedForeground} />
+                  </View>
+                )}
                 <Pressable
                   onPress={() => onChange({ photos: (result?.photos ?? []).filter((_, j) => j !== i) })}
                   hitSlop={8}
@@ -430,17 +465,14 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
   const tplQ = useTemplate(insp.template_id);
   const [sharing, setSharing] = useState(false);
   const issues = issuesOf(draft.results);
+  const keyResults = draft.results.filter((r) => r.room === KEYS_ROOM);
   const okCount = draft.results.length - issues.length;
 
   const share = async () => {
     setSharing(true);
     try {
-      const paths = draft.results.flatMap((r) => r.photos).filter((p) => !isLocalPhoto(p));
-      const photoUrls: Record<string, string> = {};
-      if (paths.length) {
-        const { data } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600);
-        for (const d of data ?? []) if (d.path && d.signedUrl) photoUrls[d.path] = d.signedUrl;
-      }
+      // Photos are embedded in the PDF itself, including ones still on the phone.
+      const photoUrls = await photoDataUris(issuesOf(draft.results).flatMap((r) => r.photos));
       const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
@@ -472,6 +504,19 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
           <IssueRow key={`${r.room}|${r.item}`} r={r} />
         ))}
       </Card>
+      {keyResults.length > 0 && (
+        <Card style={{ padding: 14, gap: 8 }}>
+          <Label style={{ marginBottom: 0 }}>{KEYS_ROOM}</Label>
+          {keyResults.map((r) => (
+            <View key={r.item} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <Text>{r.item}</Text>
+              <Text weight="medium" style={{ color: r.condition === "ok" ? c.foreground : c.destructive, flexShrink: 1, textAlign: "right" }}>
+                {conditionText(r)}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      )}
       {!!draft.general_notes && (
         <Card style={{ padding: 14, gap: 6 }}>
           <Label style={{ marginBottom: 0 }}>Notes</Label>
@@ -499,7 +544,7 @@ function IssueRow({ r }: { r: InspectionResult }) {
         <Text weight="medium" style={{ flex: 1 }}>
           {r.room} · {r.item}
         </Text>
-        <Badge label={r.condition[0].toUpperCase() + r.condition.slice(1)} color={color} bg={withAlpha(color, 0.12)} />
+        <Badge label={conditionText(r)} color={color} bg={withAlpha(color, 0.12)} />
       </View>
       {!!r.note && (
         <Text muted size={13}>
@@ -508,9 +553,15 @@ function IssueRow({ r }: { r: InspectionResult }) {
       )}
       {photos.length > 0 && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {photos.map((u) => (
-            <Image key={u} source={{ uri: u }} style={{ width: 96, height: 96, borderRadius: 8, backgroundColor: c.muted }} />
-          ))}
+          {photos.map((u, i) =>
+            u ? (
+              <Image key={`${i}:${u}`} source={{ uri: u }} style={{ width: 96, height: 96, borderRadius: 8, backgroundColor: c.muted }} />
+            ) : (
+              <View key={i} style={{ width: 96, height: 96, borderRadius: 8, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="small" color={c.mutedForeground} />
+              </View>
+            ),
+          )}
         </View>
       )}
     </View>

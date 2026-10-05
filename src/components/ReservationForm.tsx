@@ -5,6 +5,7 @@ import { Button, Field, Input, Select, Sheet, Text } from "@/components/ui";
 import { DirectPaymentSelect, StatusBadge } from "@/components/badges";
 import { RangePicker } from "@/components/RangePicker";
 import { useColors } from "@/lib/theme";
+import { guestCounts } from "@/lib/guests";
 import {
   getOverlappingReservations,
   useAddReservation,
@@ -38,6 +39,9 @@ interface FormState {
   notes: string;
   status: ReservationStatus;
   direct_payment_method: DirectPaymentMethod;
+  adults: string;
+  children: string;
+  infants: string;
 }
 
 const empty: FormState = {
@@ -51,6 +55,9 @@ const empty: FormState = {
   notes: "",
   status: "pending",
   direct_payment_method: "cash",
+  adults: "1",
+  children: "0",
+  infants: "0",
 };
 
 export function ReservationForm({
@@ -97,6 +104,9 @@ export function ReservationForm({
         notes: editing.notes ?? "",
         status: editing.status,
         direct_payment_method: (editing.direct_payment_method as DirectPaymentMethod) || "cash",
+        adults: String(editing.adults ?? 1),
+        children: String(editing.children ?? 0),
+        infants: String(editing.infants ?? 0),
       });
     } else {
       setForm({ ...empty, apartment_id: preset?.apartment_id ?? "", check_in: preset?.check_in ?? "" });
@@ -132,7 +142,8 @@ export function ReservationForm({
         await updateMut.mutateAsync({ id: editing.id, ...payload, status: form.status });
         Alert.alert("Reservation updated", `Booking for ${form.guest_name} has been modified.`);
       } else {
-        await addMut.mutateAsync({ ...payload, status: newStatus });
+        // Like the website, guest counts are set when a booking is created.
+        await addMut.mutateAsync({ ...payload, ...guestCounts(form), status: newStatus });
         Alert.alert("Reservation created", `Booking for ${form.guest_name} has been added.`);
       }
       setOverlaps(null);
@@ -143,8 +154,8 @@ export function ReservationForm({
   };
 
   const submit = () => {
-    const missingPhone = showContacts && !form.guest_phone.trim();
-    if (!form.apartment_id || !form.guest_name.trim() || !form.check_in || !form.check_out || missingPhone) {
+    const missingPhone = showContacts && !(form.guest_phone ?? "").trim();
+    if (!form.apartment_id || !(form.guest_name ?? "").trim() || !form.check_in || !form.check_out || missingPhone) {
       Alert.alert("Missing fields", "Please fill in all required fields including phone number.");
       return;
     }
@@ -206,6 +217,26 @@ export function ReservationForm({
         {editing && (
           <Field label="Status">
             <Select value={form.status} options={STATUS_OPTIONS} onChange={(v) => set({ status: v })} />
+          </Field>
+        )}
+        {!editing && (
+          <Field label="Number of guests *">
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {(
+                [
+                  ["adults", "Adults"],
+                  ["children", "Children"],
+                  ["infants", "Infants"],
+                ] as const
+              ).map(([k, label]) => (
+                <View key={k} style={{ flex: 1, gap: 4 }}>
+                  <Text muted size={12}>
+                    {label}
+                  </Text>
+                  <Input value={form[k]} onChangeText={(v) => set({ [k]: v.replace(/[^0-9]/g, "") })} keyboardType="number-pad" />
+                </View>
+              ))}
+            </View>
           </Field>
         )}
         <Field label="Notes">

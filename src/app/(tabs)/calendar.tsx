@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { router } from "expo-router";
 import { CalendarPlus, ChevronLeft, ChevronRight, Lock, Unlock } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Button, Card, Field, Input, PageHeader, Select, Sheet, Text } from "@/components/ui";
 import { SourceBadge } from "@/components/badges";
 import { RangePicker } from "@/components/RangePicker";
-import { ReservationDetail } from "@/components/ReservationDetail";
 import { ReservationForm } from "@/components/ReservationForm";
 import {
   useAddBlockedDate,
@@ -41,7 +41,6 @@ export default function CalendarScreen() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [building, setBuilding] = useState<string>("all");
-  const [selected, setSelected] = useState<Reservation | null>(null);
   const [editing, setEditing] = useState<Reservation | null>(null);
   const [creating, setCreating] = useState<{ apartment_id: string; check_in: string } | null>(null);
   const [cell, setCell] = useState<{ type: "block" | "unblock"; apartmentId: string; date: string; block?: BlockedDate } | null>(null);
@@ -109,16 +108,18 @@ export default function CalendarScreen() {
     setMonth(d.getMonth());
   };
 
+  const openReservation = (r: Reservation) => router.push({ pathname: "/reservation/[id]", params: { id: r.id } });
+
   const label = (r: Reservation) => {
     const nights = nightsBetween(r.check_in, r.check_out);
-    const first = r.guest_name.split(" ")[0];
+    const first = (r.guest_name ?? "Guest").split(" ")[0] || "Guest";
     const name = nights < 4 ? first.slice(0, 2) : first;
     return showFinancial ? `${name} · ${r.total_price} AED` : name;
   };
 
   const onCellPress = (aptId: string, day: number, s: DayStatus) => {
     const ds = dateStr(year, month, day);
-    if (s.type === "reserved") setSelected(s.res);
+    if (s.type === "reserved") openReservation(s.res);
     else if (s.type === "blocked") setCell({ type: "unblock", apartmentId: aptId, date: ds, block: s.block });
     else if (s.type === "available") {
       setCell({ type: "block", apartmentId: aptId, date: ds });
@@ -161,7 +162,6 @@ export default function CalendarScreen() {
   };
 
   const days = Array.from({ length: nDays }, (_, i) => i + 1);
-  const selectedInfo = selected ? aptLabel(selected.apartment_id) : null;
 
   return (
     <Screen onRefresh={refresh} refreshing={reservationsQ.isRefetching}>
@@ -245,8 +245,8 @@ export default function CalendarScreen() {
                       if (s.type === "split") {
                         return (
                           <View key={d} style={{ width: colW, flexDirection: "row", gap: 2, paddingVertical: 3 }}>
-                            <Pressable onPress={() => setSelected(s.checkout)} style={{ flex: 1, backgroundColor: c.booked, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
-                            <Pressable onPress={() => setSelected(s.checkin)} style={{ flex: 1, backgroundColor: c.booked, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
+                            <Pressable onPress={() => openReservation(s.checkout)} style={{ flex: 1, backgroundColor: c.booked, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
+                            <Pressable onPress={() => openReservation(s.checkin)} style={{ flex: 1, backgroundColor: c.booked, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
                           </View>
                         );
                       }
@@ -259,7 +259,7 @@ export default function CalendarScreen() {
                         return (
                           <Pressable
                             key={d}
-                            onPress={() => setSelected(s.res)}
+                            onPress={() => openReservation(s.res)}
                             style={{
                               width: colW,
                               marginVertical: 3,
@@ -327,20 +327,6 @@ export default function CalendarScreen() {
           />
         </View>
       </Card>
-
-      <ReservationDetail
-        reservation={selected}
-        apartment={selectedInfo?.apt}
-        building={selectedInfo?.bld}
-        showFinancial={showFinancial}
-        showContacts={showContacts}
-        canEdit={canEditAny && selected?.source === "direct"}
-        onEdit={(r) => {
-          setSelected(null);
-          setEditing(r);
-        }}
-        onClose={() => setSelected(null)}
-      />
 
       <ReservationForm
         open={!!editing || !!creating}

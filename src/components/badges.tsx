@@ -4,6 +4,9 @@ import { Badge, Text } from "@/components/ui";
 import { radius, useColors } from "@/lib/theme";
 import type { DirectPaymentMethod, ReservationSource, Thread } from "@/lib/types";
 
+export { SOURCE_LABEL, DIRECT_PAYMENT_LABELS, directPaymentLabel } from "@/lib/labels";
+import { DIRECT_PAYMENT_LABELS } from "@/lib/labels";
+
 // Same badges as the website's StatusBadge and SourceBadge components.
 
 type Status = "confirmed" | "pending" | "cancelled" | "checked-in" | "checked-out" | "no-show";
@@ -30,22 +33,6 @@ export function withAlpha(color: string, alpha: number) {
     return color + a;
   }
   return color;
-}
-
-export const SOURCE_LABEL: Record<ReservationSource, string> = {
-  booking: "Booking.com",
-  airbnb: "Airbnb",
-  direct: "Direct",
-};
-
-export const DIRECT_PAYMENT_LABELS: Record<DirectPaymentMethod, string> = {
-  cash: "Cash",
-  payment_link: "Payment Link",
-  bank_transfer: "Bank Transfer",
-};
-
-export function directPaymentLabel(m?: DirectPaymentMethod | null) {
-  return m ? DIRECT_PAYMENT_LABELS[m] : "";
 }
 
 const airbnbLogo = require("../../assets/images/airbnb-logo.png");

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
+import { router } from "expo-router";
 import { ArrowRight, Building2, CalendarDays, Home, LogIn, LogOut } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Card, Empty, Divider, PageHeader, Sheet, Text } from "@/components/ui";
@@ -7,6 +8,7 @@ import { StatusBadge, withAlpha } from "@/components/badges";
 import { useApartments, useBlockedDates, useBuildings, useReservations } from "@/hooks/data";
 import { useMyPermissions } from "@/hooks/permissions";
 import { addDays, toISO } from "@/lib/dates";
+import { UPCOMING_DAYS, upcomingReservations } from "@/lib/upcoming";
 import { useColors } from "@/lib/theme";
 import type { Reservation } from "@/lib/types";
 
@@ -60,14 +62,8 @@ export default function Dashboard() {
     } as Record<ActivityType, Reservation[]>;
   }, [reservations, today, tomorrow]);
 
-  const upcoming = useMemo(
-    () =>
-      reservations
-        .filter((r) => r.status === "confirmed" || r.status === "pending")
-        .sort((a, b) => a.check_in.localeCompare(b.check_in))
-        .slice(0, 5),
-    [reservations],
-  );
+  const upcomingLast = toISO(addDays(new Date(), UPCOMING_DAYS));
+  const upcoming = useMemo(() => upcomingReservations(reservations, today, upcomingLast), [reservations, today, upcomingLast]);
 
   const available = useMemo(
     () =>
@@ -101,7 +97,13 @@ export default function Dashboard() {
   const ReservationRow = ({ r }: { r: Reservation }) => {
     const { apt, bld } = aptInfo(r.apartment_id);
     return (
-      <View style={{ paddingHorizontal: 14, paddingVertical: 12, gap: 4 }}>
+      <Pressable
+        onPress={() => {
+          setActive(null);
+          router.push({ pathname: "/reservation/[id]", params: { id: r.id } });
+        }}
+        style={({ pressed }) => ({ paddingHorizontal: 14, paddingVertical: 12, gap: 4, opacity: pressed ? 0.6 : 1 })}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <Text weight="medium" style={{ flex: 1 }} numberOfLines={1}>
             {r.guest_name}
@@ -122,7 +124,7 @@ export default function Dashboard() {
             </Text>
           )}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -197,6 +199,9 @@ export default function Dashboard() {
         <Text weight="semibold" size={16} style={{ padding: 14 }}>
           Upcoming Reservations
         </Text>
+        <Text muted size={12} style={{ paddingHorizontal: 14, marginTop: -10, paddingBottom: 10 }}>
+          Check-ins today and the next {UPCOMING_DAYS} days
+        </Text>
         <Divider />
         {upcoming.map((r, i) => (
           <View key={r.id}>
@@ -204,7 +209,7 @@ export default function Dashboard() {
             <ReservationRow r={r} />
           </View>
         ))}
-        {upcoming.length === 0 && <Empty>No upcoming reservations</Empty>}
+        {upcoming.length === 0 && <Empty>No check-ins in the next {UPCOMING_DAYS} days</Empty>}
       </Card>
 
       <Sheet open={!!active} onClose={() => setActive(null)} title={active ? TITLES[active] : ""}>

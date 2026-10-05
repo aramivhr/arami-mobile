@@ -53,7 +53,7 @@ describe("tapping a notification or alert opens the right screen", () => {
       const id = d.dedupe_key?.startsWith("msg:") ? d.dedupe_key.split(":")[1] : "";
       expect(t).toEqual(id ? { pathname: "/thread/[id]", params: { id } } : "/messages");
     } else if (d.type === "notification" && ["new", "modified", "cancelled"].includes(d.kind as string)) {
-      expect(t).toEqual(d.reservation_id ? { pathname: "/reservations", params: { id: d.reservation_id } } : "/reservations");
+      expect(t).toEqual(d.reservation_id ? { pathname: "/reservation/[id]", params: { id: d.reservation_id } } : "/reservations");
     } else {
       expect(t).toBe("/notifications");
     }
