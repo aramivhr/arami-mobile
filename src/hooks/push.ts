@@ -34,8 +34,11 @@ function projectId(): string | undefined {
   return Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 }
 
+/** Expo Go (the test app from the store) can't receive remote alerts; only real builds can. */
+const inExpoGo = Constants.executionEnvironment === "storeClient";
+
 async function getToken(): Promise<string | null> {
-  if (Platform.OS === "web" || !Device.isDevice) return null;
+  if (Platform.OS === "web" || !Device.isDevice || inExpoGo) return null;
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
       name: "Alerts",

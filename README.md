@@ -44,6 +44,16 @@ Builds: `npx eas-cli build -p ios` (TestFlight) and
 (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`). They are the same
 public values the website ships to every browser.
 
+## Try it in Expo Go (before publishing)
+
+1. Install Node.js (LTS) on a computer, and the Expo Go app on the phone.
+2. Download this repo (GitHub: Code → Download ZIP, then unzip), open a terminal in the folder.
+3. `npm install`, then `npx expo start`.
+4. Scan the QR code: iPhone camera, or the scanner inside Expo Go on Android.
+   Phone and computer must be on the same Wi-Fi; otherwise use `npx expo start --tunnel`.
+
+Everything works in Expo Go except phone alerts, which need a real build.
+
 ## Backend
 
 The app uses the website's Supabase (Lovable Cloud). Its own data lives only in
