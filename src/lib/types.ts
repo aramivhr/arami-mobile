@@ -68,7 +68,7 @@ export interface BlockedDate {
 
 export interface AppNotification {
   id: string;
-  kind: "new" | "modified" | "cancelled" | "message";
+  kind: "new" | "modified" | "cancelled" | "message" | "alert";
   title: string;
   body: string;
   reservation_id: string | null;
@@ -97,6 +97,8 @@ export interface Thread {
   children: number | null;
   infants: number | null;
   guest_ages: unknown;
+  /** The reservation channex-messages linked this conversation to, when it found one. */
+  reservation_id?: string | null;
 }
 
 export interface ThreadMessage {

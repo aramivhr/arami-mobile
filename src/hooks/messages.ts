@@ -1,25 +1,54 @@
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invokeFunction } from "@/lib/supabase";
 import type { Thread, ThreadMessage } from "@/lib/types";
 
 // Guest messaging through the website's existing channex-messages function
 // (Airbnb + Booking.com via Channex). Same polling intervals as the website.
 
+export const THREADS_KEY = ["msg-threads"] as const;
+export const fetchThreads = () => invokeFunction<{ threads: Thread[] }>("channex-messages", { action: "threads" });
+const fetchMessages = (threadId: string) => invokeFunction<{ messages: ThreadMessage[] }>("channex-messages", { action: "messages", thread_id: threadId });
+
 export function useThreads() {
   return useQuery({
-    queryKey: ["msg-threads"],
-    queryFn: () => invokeFunction<{ threads: Thread[] }>("channex-messages", { action: "threads" }),
+    queryKey: THREADS_KEY,
+    queryFn: fetchThreads,
     refetchInterval: 15_000,
     staleTime: 10_000,
+    gcTime: 30 * 60_000,
   });
+}
+
+/**
+ * Keeps the conversation list loaded while the app is open, for admins (the
+ * website's MessagesWarmup), so Messages opens with it instead of waiting on
+ * Channex. The Messages screen itself still refreshes every 15s.
+ */
+export function useMessagesWarmup(enabled: boolean) {
+  useQuery({ queryKey: THREADS_KEY, queryFn: fetchThreads, enabled, staleTime: 10_000, gcTime: 30 * 60_000, refetchInterval: 120_000 });
+}
+
+/**
+ * Preloads the newest conversations two at a time, as the website now does,
+ * rather than firing a Channex call per conversation at once.
+ */
+export async function preloadRecentThreads(qc: QueryClient, threads: Thread[], count = 8, concurrency = 2) {
+  const queue = threads.slice(0, count).map((t) => t.id);
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      const threadId = id;
+      await qc.prefetchQuery({ queryKey: ["msg-thread", threadId], queryFn: () => fetchMessages(threadId), staleTime: 30_000 });
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
 }
 
 export function useThreadMessages(threadId: string | undefined) {
   return useQuery({
     queryKey: ["msg-thread", threadId],
-    queryFn: () => invokeFunction<{ messages: ThreadMessage[] }>("channex-messages", { action: "messages", thread_id: threadId }),
+    queryFn: () => fetchMessages(threadId!),
     enabled: !!threadId,
     refetchInterval: 5_000,
     staleTime: 4_000,

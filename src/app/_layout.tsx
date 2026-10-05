@@ -14,6 +14,9 @@ import { AuthProvider, useAuth } from "@/hooks/auth";
 import { BiometricGate } from "@/hooks/biometric";
 import { usePushRegistration, usePushRouting } from "@/hooks/push";
 import { useInspectionSync } from "@/hooks/inspections";
+import { useMessagesWarmup } from "@/hooks/messages";
+import { useUserType } from "@/hooks/permissions";
+import { NewBookingAlert } from "@/components/NewBookingAlert";
 import { Login } from "@/components/Login";
 import { fonts, useColors } from "@/lib/theme";
 
@@ -36,12 +39,15 @@ function Root() {
   return <SignedIn />;
 }
 
-/** Everything that needs a signed-in person: alerts, background upload of inspections, and the screens. */
+/** Everything that needs a signed-in person: alerts, background upload of inspections, the new-booking pop-up, and the screens. */
 function SignedIn() {
   const c = useColors();
   usePushRegistration();
   usePushRouting();
   useInspectionSync();
+  const { data: type } = useUserType();
+  const isAdmin = type === "admin" || type === "super_admin";
+  useMessagesWarmup(isAdmin);
 
   return (
     <BiometricGate>
@@ -64,6 +70,7 @@ function SignedIn() {
         <Stack.Screen name="inspection/[id]" options={{ title: "Inspection" }} />
         <Stack.Screen name="alert-settings" options={{ title: "Phone alerts" }} />
       </Stack>
+      {isAdmin && <NewBookingAlert />}
     </BiometricGate>
   );
 }

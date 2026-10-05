@@ -82,3 +82,10 @@ export function dateTime(iso: string) {
 export function dubaiISO(d: Date = new Date()) {
   return new Date(d.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
 }
+
+/** Money as the website's calendar and reservation details show it: no trailing ".00", thousands separated (the website's formatAmount). */
+export function formatAmount(value: number | string | null | undefined) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return String(value ?? "");
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}

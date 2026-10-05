@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
+import { useUserType } from "@/hooks/permissions";
+import { buildOverbookings, type IntakeRow, type MappingRow } from "@/lib/overbookings";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
 // Queries and writes mirror the website's hooks (rent-halo-system
@@ -137,6 +140,21 @@ export function useDeleteReservation() {
   });
 }
 
+/**
+ * The passport / ID number already on file. reservations_safe (the list the app
+ * loads) leaves it out, so it is read from reservations, as the website does.
+ */
+export function useGuestIdNumber(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["guest-id-number", id],
+    enabled,
+    queryFn: async () => {
+      const { data } = await supabase.from("reservations").select("guest_id_number, additional_guests").eq("id", id).maybeSingle();
+      return { guest_id_number: (data?.guest_id_number as string | null) ?? null, additional_guests: (data?.additional_guests as string | null) ?? null };
+    },
+  });
+}
+
 export function useSaveGuestDetails() {
   const qc = useQueryClient();
   return useMutation({
@@ -147,8 +165,47 @@ export function useSaveGuestDetails() {
         .eq("id", v.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["reservations"] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["reservations"] });
+      qc.invalidateQueries({ queryKey: ["guest-id-number", v.id] });
+    },
   });
+}
+
+/**
+ * Channel bookings waiting for a free unit, for the calendar (the website's
+ * use-overbookings.ts). The intake and mapping tables are admin-only, so other
+ * users get an empty list.
+ */
+export function useOverbookings(apartments: Apartment[], reservations: Reservation[]) {
+  const { data: userType } = useUserType();
+  const { data } = useQuery({
+    queryKey: ["overbookings"],
+    enabled: userType === "admin" || userType === "super_admin",
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const { data: waiting, error } = await supabase
+        .from("channex_booking_intake")
+        .select("channex_booking_id")
+        .eq("status", "needs_manual_assignment");
+      if (error) throw error;
+      const bookingIds = [...new Set((waiting ?? []).map((w: { channex_booking_id: string }) => w.channex_booking_id))];
+      if (bookingIds.length === 0) return { intake: [] as IntakeRow[], mappings: [] as MappingRow[] };
+      // Every revision of those bookings, so a later revision that did import wins.
+      const { data: intake, error: intakeErr } = await supabase
+        .from("channex_booking_intake")
+        .select("channex_booking_id, channex_property_id, received_at, status, error, raw_revision")
+        .in("channex_booking_id", bookingIds);
+      if (intakeErr) throw intakeErr;
+      const { data: mappings, error: mapErr } = await supabase
+        .from("channex_mapping")
+        .select("entity_type, channex_id, internal_id")
+        .in("entity_type", ["property", "room_type"]);
+      if (mapErr) throw mapErr;
+      return { intake: (intake ?? []) as IntakeRow[], mappings: (mappings ?? []) as MappingRow[] };
+    },
+  });
+  return useMemo(() => (data ? buildOverbookings(data.intake, data.mappings, apartments, reservations) : []), [data, apartments, reservations]);
 }
 
 export function useAddBlockedDate() {
