@@ -41,21 +41,22 @@ export function inspectionReportHtml({
     ? withKeysSection(template.rooms)
     : [...new Set(insp.results.map((r) => r.room))].map((room) => ({ room, items: [] as string[] }));
 
-  const issueRows = issues
-    .map((r) => {
-      const c = CONDITION[r.condition];
-      const photos = r.photos
-        .map((p) => photoUrls[p])
-        .filter(Boolean)
-        .map((u) => `<img src="${esc(u)}" />`)
-        .join("");
-      return `<div class="issue">
-        <div><b>${esc(r.room)} · ${esc(r.item)}</b> <span class="tag" style="color:${c.color};border-color:${c.color}">${esc(conditionText(r))}</span></div>
-        ${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
-        ${photos ? `<div class="photos">${photos}</div>` : ""}
-      </div>`;
-    })
-    .join("");
+  const photographed = insp.results.filter((r) => r.condition === "ok" && r.photos.length > 0);
+  const row = (r: InspectionResult) => {
+    const c = CONDITION[r.condition];
+    const photos = r.photos
+      .map((p) => photoUrls[p])
+      .filter(Boolean)
+      .map((u) => `<img src="${esc(u)}" />`)
+      .join("");
+    return `<div class="issue">
+      <div><b>${esc(r.room)} · ${esc(r.item)}</b> <span class="tag" style="color:${c.color};border-color:${c.color}">${esc(conditionText(r))}</span></div>
+      ${r.note ? `<div class="note">${esc(r.note)}</div>` : ""}
+      ${photos ? `<div class="photos">${photos}</div>` : ""}
+    </div>`;
+  };
+  const issueRows = issues.map(row).join("");
+  const otherRows = photographed.map(row).join("");
 
   const roomTables = rooms
     .map(({ room, items }) => {
@@ -99,6 +100,7 @@ ${insp.summary ? `<h2>Report</h2><div class="summary">${esc(insp.summary)}</div>
 ${insp.general_notes ? `<h2>Notes</h2><div class="summary">${esc(insp.general_notes)}</div>` : ""}
 <h2>Items needing attention (${issues.length})</h2>
 ${issueRows || "<div>None</div>"}
+${otherRows ? `<h2>Other photos</h2>${otherRows}` : ""}
 <h2>Full checklist</h2>
 ${roomTables}
 </body></html>`;

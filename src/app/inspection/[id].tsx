@@ -414,34 +414,31 @@ function ItemRow({
           />
         </View>
       )}
-      {(issue || !!result?.note || !!result?.photos.length) && (
-        <>
-          <Input value={result?.note ?? ""} onChangeText={(t) => onChange({ note: t })} placeholder="What's wrong?" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {photos.map((u, i) => (
-              <View key={`${i}:${result?.photos[i]}`}>
-                {u ? (
-                  <Image source={{ uri: u }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted }} />
-                ) : (
-                  <View style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
-                    <ActivityIndicator size="small" color={c.mutedForeground} />
-                  </View>
-                )}
-                <Pressable
-                  onPress={() => onChange({ photos: (result?.photos ?? []).filter((_, j) => j !== i) })}
-                  hitSlop={8}
-                  accessibilityLabel="Remove photo"
-                  style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: c.foreground, alignItems: "center", justifyContent: "center" }}
-                >
-                  <X size={12} color={c.background} />
-                </Pressable>
+      {(issue || !!result?.note) && <Input value={result?.note ?? ""} onChangeText={(t) => onChange({ note: t })} placeholder="What's wrong?" />}
+      {/* Photos can be added to any item, damaged or not. */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {photos.map((u, i) => (
+          <View key={`${i}:${result?.photos[i]}`}>
+            {u ? (
+              <Image source={{ uri: u }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted }} />
+            ) : (
+              <View style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
+                <ActivityIndicator size="small" color={c.mutedForeground} />
               </View>
-            ))}
-            <PhotoButton Icon={Camera} label="Take photo" onPress={() => onAddPhoto("camera")} />
-            <PhotoButton Icon={ImagePlus} label="Choose photo" onPress={() => onAddPhoto("library")} />
+            )}
+            <Pressable
+              onPress={() => onChange({ photos: (result?.photos ?? []).filter((_, j) => j !== i) })}
+              hitSlop={8}
+              accessibilityLabel="Remove photo"
+              style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: 11, backgroundColor: c.foreground, alignItems: "center", justifyContent: "center" }}
+            >
+              <X size={12} color={c.background} />
+            </Pressable>
           </View>
-        </>
-      )}
+        ))}
+        <PhotoButton Icon={Camera} label="Take photo" onPress={() => onAddPhoto("camera")} />
+        <PhotoButton Icon={ImagePlus} label="Choose photo" onPress={() => onAddPhoto("library")} />
+      </View>
     </View>
   );
 }
@@ -466,13 +463,14 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
   const [sharing, setSharing] = useState(false);
   const issues = issuesOf(draft.results);
   const keyResults = draft.results.filter((r) => r.room === KEYS_ROOM);
+  const otherPhotos = draft.results.filter((r) => r.condition === "ok" && r.photos.length > 0);
   const okCount = draft.results.length - issues.length;
 
   const share = async () => {
     setSharing(true);
     try {
       // Photos are embedded in the PDF itself, including ones still on the phone.
-      const photoUrls = await photoDataUris(issuesOf(draft.results).flatMap((r) => r.photos));
+      const photoUrls = await photoDataUris(draft.results.flatMap((r) => r.photos));
       const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
@@ -504,6 +502,14 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
           <IssueRow key={`${r.room}|${r.item}`} r={r} />
         ))}
       </Card>
+      {otherPhotos.length > 0 && (
+        <Card style={{ padding: 14, gap: 12 }}>
+          <Label style={{ marginBottom: 0 }}>Other photos</Label>
+          {otherPhotos.map((r) => (
+            <IssueRow key={`${r.room}|${r.item}`} r={r} />
+          ))}
+        </Card>
+      )}
       {keyResults.length > 0 && (
         <Card style={{ padding: 14, gap: 8 }}>
           <Label style={{ marginBottom: 0 }}>{KEYS_ROOM}</Label>
@@ -537,7 +543,7 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
 function IssueRow({ r }: { r: InspectionResult }) {
   const c = useColors();
   const photos = usePhotoUrls(r.photos);
-  const color = r.condition === "dirty" ? c.amber500 : c.destructive;
+  const color = r.condition === "ok" ? c.success : r.condition === "dirty" ? c.amber500 : c.destructive;
   return (
     <View style={{ gap: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>

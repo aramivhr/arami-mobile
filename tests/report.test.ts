@@ -54,8 +54,11 @@ describe("inspection PDF shows guest text safely and counts items right", () => 
     expect(html).not.toMatch(/src="[^"]*"[^ />]/);
     const issues = c.results.filter((r) => r.condition !== "ok");
     expect(html).toContain(`Items needing attention (${issues.length})`);
-    expect((html.match(/class="issue"/g) ?? []).length).toBe(issues.length);
-    const expectedImgs = c.signAll ? issues.reduce((n, r) => n + r.photos.length, 0) : 0;
+    // Items with problems, plus OK items that have photos.
+    const shown = c.results.filter((r) => r.condition !== "ok" || r.photos.length > 0);
+    expect((html.match(/class="issue"/g) ?? []).length).toBe(shown.length);
+    expect(html.includes("<h2>Other photos</h2>")).toBe(shown.length > issues.length);
+    const expectedImgs = c.signAll ? shown.reduce((n, r) => n + r.photos.length, 0) : 0;
     expect((html.match(/<img /g) ?? []).length).toBe(expectedImgs);
     if (c.hasTemplate) {
       const unchecked = CHECKLIST.reduce((n, { room, items }) => n + items.filter((i) => !c.results.some((r) => r.room === room && r.item === i)).length, 0);
