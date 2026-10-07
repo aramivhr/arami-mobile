@@ -8,6 +8,12 @@ type Filter = (r: Row) => boolean;
 export interface FakeOptions {
   /** Unique keys per table, used by upsert's onConflict and plain inserts. */
   unique?: Record<string, string[][]>;
+  /**
+   * Unique indexes that have a WHERE clause, e.g. notifications.dedupe_key
+   * (WHERE dedupe_key IS NOT NULL). Postgres cannot use them for
+   * ON CONFLICT (col), so upsert with that onConflict fails as it does live.
+   */
+  partialUnique?: Record<string, string[]>;
   /** Adds joined data such as apartments(name, buildings(name)). */
   join?: (table: string, row: Row, select: string) => Row;
 }
@@ -121,6 +127,9 @@ export class FakeSupabase {
     }
     // insert / upsert
     const incoming = (Array.isArray(q.payload) ? q.payload : [q.payload]) as Row[];
+    if (q.op === "upsert" && q.onConflict && (this.opts.partialUnique?.[q.table] ?? []).includes(q.onConflict.replace(/\s/g, ""))) {
+      return { data: null, error: { code: "42P10", message: "there is no unique or exclusion constraint matching the ON CONFLICT specification" } };
+    }
     const conflictCols = q.onConflict ? [q.onConflict.split(",").map((s) => s.trim())] : unique;
     const inserted: Row[] = [];
     for (const raw of incoming) {

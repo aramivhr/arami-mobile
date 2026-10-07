@@ -53,11 +53,16 @@ function scenario(seed: number) {
     damage_found: r.bool(), guest_name: "G", created_at: ago(r.pick([1, 30])), completed_at: r.bool() ? ago(r.pick([1, 30])) : null,
   }));
   const syncLog = Array.from({ length: r.int(0, 3) }, (_, i) => ({ id: `s${i}`, kind: "availability", error: r.bool() ? "x".repeat(r.int(1, 300)) : null, created_at: ago(r.pick([1, 30])) }));
-  const threads = Array.from({ length: r.int(0, 3) }, (_, i) => ({
-    id: `th${i}`,
-    attributes: { title: `Guest ${i}`, provider: "AirBNB", last_message: r.bool(0.8) ? `hello ${i}` : null, last_message_received_at: ago(0.1 * (i + 1)) },
-    relationships: {},
-  }));
+  const threads = Array.from({ length: r.int(0, 4) }, (_, i) => {
+    const text = r.bool(0.8) ? `hello ${i}` : null;
+    // Channex sends last_message as a string or as { message, sender }.
+    const sender = r.pick([null, "guest", "property"]);
+    return {
+      id: `th${i}`,
+      attributes: { title: `Guest ${i}`, provider: "AirBNB", last_message: text && sender ? { message: text, sender } : text, last_message_received_at: ago(r.pick([0.1 * (i + 1), 1.9, 2.1, 30])) },
+      relationships: {},
+    };
+  });
   const alreadyNotified = threads.filter(() => r.bool(0.3)).map((t) => `msg:${t.id}:${t.attributes.last_message_received_at}`);
   const dead = new Set(users.flatMap((u) => u.devices).filter(() => r.bool(0.1)));
   return { now, today, users, apartments, reservations, notifications, inspections, syncLog, threads, alreadyNotified, dead };
@@ -71,6 +76,8 @@ describe("phone alerts from mobile-push-dispatch", () => {
     vi.setSystemTime(s.now);
     const apt = (id: string) => s.apartments.find((a) => a.id === id) ?? null;
     const db = new FakeSupabase({
+      // Live: CREATE UNIQUE INDEX idx_notifications_dedupe_key ... WHERE dedupe_key IS NOT NULL
+      partialUnique: { notifications: ["dedupe_key"] },
       unique: { notifications: [["dedupe_key"]], mobile_push_log: [["source", "source_id"]], mobile_inspections: [["reservation_id"]], mobile_devices: [["expo_push_token"]] },
       join: (table, row, select) => (select.includes("apartments(") && (table === "mobile_inspections" || table === "reservations") ? { ...row, apartments: apt(row.apartment_id) } : row),
     });
@@ -115,9 +122,23 @@ describe("phone alerts from mobile-push-dispatch", () => {
       expect(i.template_id).toBe("tpl");
     }
 
-    // Guest messages: a notification and one email for each message seen the first time, none for ones already notified.
-    const fresh = s.threads.filter((t) => t.attributes.last_message && !s.alreadyNotified.includes(`msg:${t.id}:${t.attributes.last_message_received_at}`));
+    // Guest messages: a notification and one email for each guest message from the last 2 hours seen the first time,
+    // none for ones already notified, our own replies, or old threads.
+    const fresh = s.threads.filter((t) => {
+      const lm: any = t.attributes.last_message;
+      if (!lm || (typeof lm === "object" && lm.sender !== "guest")) return false;
+      if (Date.parse(t.attributes.last_message_received_at) < s.now - 2 * 3600_000) return false;
+      return !s.alreadyNotified.includes(`msg:${t.id}:${t.attributes.last_message_received_at}`);
+    });
     expect(emails.length).toBe(fresh.length);
+    const msgKeys = db.tables.notifications.filter((n) => n.kind === "message").map((n) => n.dedupe_key);
+    expect(new Set(msgKeys).size).toBe(msgKeys.length);
+    for (const t of fresh) {
+      const n = db.tables.notifications.find((x) => x.dedupe_key === `msg:${t.id}:${t.attributes.last_message_received_at}`);
+      expect(n?.title).toBe(`New message from Guest ${t.id.slice(2)}`);
+      // and every admin with alerts on gets it on the phone (checked against expected below)
+      expect(Date.parse(n!.created_at)).toBeGreaterThanOrEqual(s.now - 24 * 3600_000);
+    }
     for (const e of emails) expect(e[2].idempotencyKey).toMatch(/^guest-message-msg:/);
 
     // Who should get what, computed independently from the rules Gevorg set.
