@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { Download, Pencil, Plus, Search, Trash2 } from "lucide-react-native";
 import { Button, Card, Empty, Input, PageHeader, Select, Text } from "@/components/ui";
 import { SourceBadge, StatusBadge, directPaymentLabel, withAlpha } from "@/components/badges";
+import { isOwnBooking } from "@/lib/labels";
 import { ReservationForm } from "@/components/ReservationForm";
 import { useApartments, useBuildings, useDeleteReservation, useReservations } from "@/hooks/data";
 import { useMyPermissions } from "@/hooks/permissions";
@@ -102,7 +103,7 @@ export function ReservationsList() {
         r.check_out,
         r.status,
         r.source ?? "direct",
-        r.source === "direct" ? directPaymentLabel(r.direct_payment_method || "cash") : "",
+        isOwnBooking(r.source) ? directPaymentLabel(r.direct_payment_method || "cash") : "",
         ...(showFinancial ? [r.total_price] : []),
         r.notes ?? "",
       ];
@@ -178,6 +179,7 @@ export function ReservationsList() {
               { value: "booking", label: "Booking.com" },
               { value: "airbnb", label: "Airbnb" },
               { value: "direct", label: "Direct" },
+              { value: "website", label: "Website" },
             ]}
           />
         </View>
@@ -287,7 +289,7 @@ const ReservationCard = memo(function ReservationCard({
             <Text weight="medium" numberOfLines={1}>
               {r.guest_name || "Guest"}
             </Text>
-            {r.source === "direct" && !!r.direct_payment_method && (
+            {isOwnBooking(r.source) && !!r.direct_payment_method && (
               <Text muted size={10}>
                 {directPaymentLabel(r.direct_payment_method)}
               </Text>

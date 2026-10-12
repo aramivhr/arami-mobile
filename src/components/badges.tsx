@@ -44,19 +44,21 @@ export function SourceBadge({ source, size = "md" }: { source: ReservationSource
   }
   const s = size === "sm" ? 18 : 26;
   const isBooking = source === "booking";
+  // Website bookings (paid on aramivhr.com): teal "W", like the website.
+  const isWebsite = source === "website";
   return (
     <View
       style={{
         width: s,
         height: s,
         borderRadius: s / 2,
-        backgroundColor: isBooking ? "#003580" : "#facc15",
+        backgroundColor: isBooking ? "#003580" : isWebsite ? "#14b8a6" : "#facc15",
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Text weight="bold" size={size === "sm" ? 10 : 13} style={{ color: isBooking ? "#fff" : "#713f12" }}>
-        {isBooking ? "B" : "D"}
+      <Text weight="bold" size={size === "sm" ? 10 : 13} style={{ color: isBooking || isWebsite ? "#fff" : "#713f12" }}>
+        {isBooking ? "B" : isWebsite ? "W" : "D"}
       </Text>
     </View>
   );

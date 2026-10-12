@@ -21,12 +21,12 @@ describe("Financial numbers match the website's Financial page", () => {
     const apartments = ["a1", "a2", "a3", "a4"].map((id) => ({ id, manage_type: r.pick(["sublease", "revenue_share", null] as const) }));
     const reservations: Reservation[] = Array.from({ length: r.int(0, 15) }, (_, i) => {
       const ci = r.iso(2026, 2026);
-      const source = r.pick(["booking", "airbnb", "direct"] as const);
+      const source = r.pick(["booking", "airbnb", "direct", "website"] as const);
       return {
         id: `r${i}`, user_id: "u", apartment_id: r.pick(apartments).id, guest_name: "G", guest_email: "", guest_phone: "",
         check_in: ci, check_out: shift(ci, r.pick([0, 1, 2, 3, 7, 14, 31, 60])), status: r.pick(["confirmed", "pending", "cancelled", "checked-out"] as const),
         total_price: r.pick([0, 450, 1000, 1234.56, 9999.99, 37000]), source,
-        direct_payment_method: source === "direct" ? r.pick(["cash", "payment_link", "bank_transfer", null] as const) : null,
+        direct_payment_method: source === "direct" || source === "website" ? r.pick(["cash", "payment_link", "bank_transfer", null] as const) : null,
       };
     });
     const financeRows = apartments.filter(() => r.bool(0.5)).map((a) => ({ apartment_id: a.id, contract_end: r.bool(0.5) ? r.iso(2026, 2026) : null }));

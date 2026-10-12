@@ -4,6 +4,7 @@ import { Check, LogIn, Percent } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Card, Divider, Empty, Label, PageHeader, Select, Sheet, Text } from "@/components/ui";
 import { SourceBadge, directPaymentLabel, withAlpha } from "@/components/badges";
+import { isOwnBooking } from "@/lib/labels";
 import { RangePicker } from "@/components/RangePicker";
 import { RequireScreen } from "@/components/RequireScreen";
 import { useApartmentFinance, useApartments, useBuildings, useReservations } from "@/hooks/data";
@@ -146,6 +147,7 @@ function FinancialScreen() {
                 { key: "booking", label: "Booking.com" },
                 { key: "airbnb", label: "Airbnb" },
                 { key: "direct", label: "Direct" },
+                { key: "website", label: "Website" },
               ] as const
             ).map(({ key, label: l }) => (
               <Card key={key} style={{ padding: 12, flexDirection: "row", alignItems: "center", gap: 10, flexGrow: 1, flexBasis: "45%" }}>
@@ -200,7 +202,7 @@ function FinancialScreen() {
                     </View>
                     <Text muted size={12}>
                       {label(r.apartment_id)}
-                      {r.source === "direct" && r.direct_payment_method ? ` · ${directPaymentLabel(r.direct_payment_method)}` : ""}
+                      {isOwnBooking(r.source) && r.direct_payment_method ? ` · ${directPaymentLabel(r.direct_payment_method)}` : ""}
                     </Text>
                     <Text muted size={12}>
                       {dotted(r.check_in)} – {dotted(r.check_out)} · {proRatedDays} day(s) in period · full price {aed(r.total_price)}

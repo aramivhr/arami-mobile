@@ -1,7 +1,7 @@
 import React from "react";
 import { FlatList, Pressable, RefreshControl, View } from "react-native";
 import { router } from "expo-router";
-import { CalendarPlus, CalendarX, MessageSquare, Pencil } from "lucide-react-native";
+import { AlertTriangle, CalendarPlus, CalendarX, MessageSquare, Pencil } from "lucide-react-native";
 import { Button, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { useMarkAllRead, useMarkRead, useNotifications, useReservations } from "@/hooks/data";
@@ -41,6 +41,8 @@ function NotificationsScreen() {
     modified: { Icon: Pencil, color: c.accent },
     cancelled: { Icon: CalendarX, color: c.destructive },
     message: { Icon: MessageSquare, color: c.emerald },
+    // Channel sync problems that need someone to look ("Needs attention" on the website).
+    alert: { Icon: AlertTriangle, color: c.destructive },
   };
 
   return (

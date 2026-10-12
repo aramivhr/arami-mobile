@@ -25,7 +25,7 @@ export interface Apartment {
 
 export type DirectPaymentMethod = "cash" | "payment_link" | "bank_transfer";
 export type ReservationStatus = "confirmed" | "pending" | "cancelled" | "checked-in" | "checked-out";
-export type ReservationSource = "booking" | "airbnb" | "direct";
+export type ReservationSource = "booking" | "airbnb" | "direct" | "website";
 
 export interface Reservation {
   id: string;
@@ -68,7 +68,7 @@ export interface BlockedDate {
 
 export interface AppNotification {
   id: string;
-  kind: "new" | "modified" | "cancelled" | "message";
+  kind: "new" | "modified" | "cancelled" | "message" | "alert";
   title: string;
   body: string;
   reservation_id: string | null;

@@ -61,7 +61,7 @@ export function computeFinancial({
   const result: FinancialResult = {
     totalAmount: 0,
     totalCheckIns: 0,
-    bySource: { booking: 0, airbnb: 0, direct: 0 },
+    bySource: { booking: 0, airbnb: 0, direct: 0, website: 0 },
     byDirectPayment: { cash: 0, payment_link: 0, bank_transfer: 0 },
     breakdown: [],
     occupancy: 0,
