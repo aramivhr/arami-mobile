@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
 import { useUserType } from "@/hooks/permissions";
 import { getsPushAlerts } from "@/lib/access";
-import { pushTarget, type PushData } from "@/lib/notify";
+import { pushTarget, showInApp, type PushData } from "@/lib/notify";
 import type { NotificationSettings } from "@/lib/types";
 
 // Phone alerts. The backend function mobile-push-dispatch sends them through
@@ -21,12 +21,11 @@ const TOKEN_KEY = "push-token";
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (n) => {
+      // Hidden kinds (WhatsApp for now) stay silent while the app is open.
+      const show = showInApp(n.request.content.data as PushData);
+      return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
+    },
   });
 }
 

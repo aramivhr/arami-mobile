@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
+import { showInApp } from "@/lib/notify";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
 // Queries and writes mirror the website's hooks (rent-halo-system
@@ -207,7 +208,7 @@ export function useNotifications() {
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
-      return (data ?? []) as AppNotification[];
+      return ((data ?? []) as AppNotification[]).filter(showInApp);
     },
   });
 }

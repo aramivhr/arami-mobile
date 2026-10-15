@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLastMinute, notificationTarget, pushTarget, threadIdFromDedupe } from "@/lib/notify";
+import { isLastMinute, notificationTarget, pushTarget, showInApp, threadIdFromDedupe } from "@/lib/notify";
 import { dubaiISO } from "@/lib/dates";
 import { cases } from "./rand";
 
@@ -74,5 +74,18 @@ describe("notification rows and alerts for the same event open the same screen",
     const data = { type: "notification", kind: n.kind, reservation_id: n.reservation_id, dedupe_key: n.dedupe_key };
     expect(pushTarget(data)).toEqual(notificationTarget(n));
     expect(threadIdFromDedupe(n.dedupe_key)).toBe(n.dedupe_key?.startsWith("msg:") ? n.dedupe_key.split(":")[1] : null);
+  });
+});
+
+describe("WhatsApp is hidden in the app while SHOW_WHATSAPP is off", () => {
+  it("hides WhatsApp notifications and alerts", () => {
+    expect(showInApp({ dedupe_key: "whatsapp:conv-1:wamid.123" })).toBe(false);
+  });
+  it("keeps website messages, reservations and keyless rows", () => {
+    expect(showInApp({ dedupe_key: "msg:thread-1:2026-10-15T10:00:00Z" })).toBe(true);
+    expect(showInApp({ dedupe_key: "res:abc" })).toBe(true);
+    expect(showInApp({ dedupe_key: null })).toBe(true);
+    expect(showInApp({})).toBe(true);
+    expect(showInApp(null)).toBe(true);
   });
 });

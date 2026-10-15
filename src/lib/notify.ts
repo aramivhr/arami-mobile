@@ -14,6 +14,22 @@ export function isLastMinute(n: Pick<AppNotification, "kind" | "reservation_id" 
   return !!r && r.check_in === dubaiISO(new Date(n.created_at));
 }
 
+/**
+ * WhatsApp is switched off in the app for now: only website (Airbnb and
+ * Booking.com) messages come through. Set to true to bring WhatsApp back.
+ */
+export const SHOW_WHATSAPP = false;
+
+/** The website's WhatsApp notifications use dedupe_key "whatsapp:{conversation_id}:{wa_message_id}". */
+export function isWhatsApp(n: { dedupe_key?: string | null } | null | undefined) {
+  return !!n?.dedupe_key?.startsWith("whatsapp:");
+}
+
+/** Whether the app shows this notification or alert at all. */
+export function showInApp(n: { dedupe_key?: string | null } | null | undefined) {
+  return SHOW_WHATSAPP || !isWhatsApp(n);
+}
+
 /** Guest-message notifications carry their thread in dedupe_key: "msg:{thread_id}:{last_message_at}". */
 export function threadIdFromDedupe(key: string | null | undefined): string | null {
   if (!key?.startsWith("msg:")) return null;
