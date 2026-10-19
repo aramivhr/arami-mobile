@@ -194,6 +194,10 @@ export function getOverlappingReservations(
 
 // ---- Notifications (the website's in-app notification list) ----
 
+// Like the website's Notifications page ("general" scope): WhatsApp messages have
+// their own bell on the website and aren't listed or marked read here.
+const GENERAL_SCOPE = "dedupe_key.is.null,dedupe_key.not.like.whatsapp:*";
+
 export function useNotifications() {
   const { user } = useAuth();
   return useQuery({
@@ -204,6 +208,7 @@ export function useNotifications() {
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
+        .or(GENERAL_SCOPE)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -227,7 +232,7 @@ export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("notifications").update({ read: true }).eq("read", false);
+      const { error } = await supabase.from("notifications").update({ read: true }).or(GENERAL_SCOPE).eq("read", false);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),

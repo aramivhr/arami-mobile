@@ -172,3 +172,12 @@ describe("guest counts on new reservations match the website", () => {
     expect(guestCounts(f)).toEqual(guestCountsPayload(f));
   });
 });
+
+describe("WhatsApp message notifications (website 2026-10-16)", () => {
+  it("never open a guest thread with a WhatsApp conversation id", async () => {
+    const { notificationTarget, pushTarget } = await import("@/lib/notify");
+    const n = { kind: "message" as const, reservation_id: null, dedupe_key: "whatsapp:conv-1:wamid.X" };
+    expect(notificationTarget(n)).toBe("/messages");
+    expect(pushTarget({ type: "notification", ...n })).toBe("/messages");
+  });
+});
