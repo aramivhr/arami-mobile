@@ -85,3 +85,35 @@ describe("Dashboard numbers match the data", () => {
     await unmount();
   });
 });
+
+// Regression (6 Nov 2026): with more than 1000 reservations the app read only
+// the first 1000 (by check-in), so today's newest bookings and tomorrow's
+// check-ins were missing and every count was lower than the website's.
+describe("Dashboard with more than 1000 reservations", () => {
+  it("counts the reservations past the first 1000", async () => {
+    const now = Date.UTC(2026, 10, 6, 9, 45);
+    vi.setSystemTime(now);
+    const today = toISO(new Date(now));
+    const tomorrow = toISO(addDays(new Date(now), 1));
+    const old = Array.from({ length: 1020 }, (_, i) => ({
+      id: `old${String(i).padStart(4, "0")}`, user_id: "x", apartment_id: APARTMENTS[i % APARTMENTS.length].id, guest_name: `Old ${i}`,
+      guest_email: "", guest_phone: "", check_in: isoShift(today, -400 + (i % 300)), check_out: isoShift(today, -399 + (i % 300)),
+      status: "checked-out", total_price: 100, source: "booking", created_at: "2025-01-01T00:00:00Z",
+    }));
+    const fresh = [
+      { id: "n1", check_in: today, check_out: tomorrow, status: "confirmed" },
+      { id: "n2", check_in: tomorrow, check_out: isoShift(today, 3), status: "confirmed" },
+      { id: "n3", check_in: tomorrow, check_out: isoShift(today, 4), status: "pending" },
+    ].map((x, i) => ({
+      ...x, user_id: "x", apartment_id: APARTMENTS[i].id, guest_name: `New ${i}`, guest_email: "", guest_phone: "",
+      total_price: 500, source: "airbnb", created_at: new Date(now - 3600_000).toISOString(),
+    }));
+    setup("admin", {}, { buildings: BUILDINGS, apartments: APARTMENTS, reservations_safe: [...old, ...fresh], blocked_dates: [] });
+    const { r, unmount } = await render(<Dashboard />);
+    const text = textOf(r);
+    expect(text).toContain(`Today's Reservations | 3 | 2 active bookings`);
+    expect(text).toContain(`Today's Check-ins | 1`);
+    expect(text).toContain(`Tomorrow's Check-ins | 2`);
+    await unmount();
+  });
+});

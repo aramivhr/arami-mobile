@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
 import { useUserType } from "@/hooks/permissions";
+import { fetchAll } from "@/lib/fetchAll";
 import { buildOverbookings, type IntakeRow, type MappingRow } from "@/lib/overbookings";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
@@ -36,9 +37,11 @@ export function useReservations() {
   return useQuery({
     queryKey: ["reservations"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reservations_safe").select("*").order("check_in");
-      if (error) throw error;
-      return data as Reservation[];
+      // Paged like the website: more than 1000 reservations exist and one request stops at 1000.
+      // Ordered by id as well so no row is skipped or repeated between pages.
+      return fetchAll<Reservation>((from, to) =>
+        supabase.from("reservations_safe").select("*").order("check_in").order("id").range(from, to),
+      );
     },
   });
 }
@@ -47,9 +50,10 @@ export function useBlockedDates() {
   return useQuery({
     queryKey: ["blocked_dates"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("blocked_dates").select("*").order("start_date");
-      if (error) throw error;
-      return data as BlockedDate[];
+      // Paged too, so blocks never vanish once there are more than 1000.
+      return fetchAll<BlockedDate>((from, to) =>
+        supabase.from("blocked_dates").select("*").order("start_date").order("id").range(from, to),
+      );
     },
   });
 }
