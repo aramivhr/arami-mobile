@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/auth";
+import { fetchAll } from "@/lib/fetchAll";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
 // Queries and writes mirror the website's hooks (rent-halo-system
@@ -33,9 +34,11 @@ export function useReservations() {
   return useQuery({
     queryKey: ["reservations"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reservations_safe").select("*").order("check_in");
-      if (error) throw error;
-      return data as Reservation[];
+      // Paged: a single request stops at 1000 rows and there are more
+      // reservations than that, so every later stay went missing.
+      return fetchAll<Reservation>((from, to) =>
+        supabase.from("reservations_safe").select("*").order("check_in").order("id").range(from, to),
+      );
     },
   });
 }
