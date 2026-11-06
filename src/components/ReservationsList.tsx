@@ -5,6 +5,7 @@ import { Download, Pencil, Plus, Search, Trash2 } from "lucide-react-native";
 import { Button, Card, Empty, Input, PageHeader, Select, Text } from "@/components/ui";
 import { SourceBadge, StatusBadge, directPaymentLabel, withAlpha } from "@/components/badges";
 import { ReservationForm } from "@/components/ReservationForm";
+import { canEditReservation } from "@/lib/access";
 import { useApartments, useBuildings, useDeleteReservation, useReservations } from "@/hooks/data";
 import { useMyPermissions } from "@/hooks/permissions";
 import { useColors } from "@/lib/theme";
@@ -26,7 +27,6 @@ export function ReservationsList() {
   const { data: perms } = useMyPermissions();
   const deleteMut = useDeleteReservation();
   const canAdd = !!(perms?.can_add_reservations || perms?.isAdmin);
-  const canEditAny = !!(perms?.can_edit_reservations || perms?.isAdmin);
   const showFinancial = perms?.show_financial ?? false;
   const showContacts = perms?.show_contacts ?? false;
 
@@ -235,7 +235,7 @@ export function ReservationsList() {
               bld={bld}
               showFinancial={showFinancial}
               showContacts={showContacts}
-              canEdit={canEditAny && (r.source ?? "direct") === "direct"}
+              canEdit={canEditReservation(perms, r.source)}
               onEdit={startEdit}
               onDelete={confirmDelete}
             />

@@ -16,13 +16,13 @@ export const TABS_BY_TYPE: Record<UserType, TabKey[]> = {
   owner: ["dashboard", "calendar", "reservations", "more"],
 };
 
-export type ScreenKey = "reservations" | "notifications" | "messages" | "financial" | "inspections" | "alert_settings";
+export type ScreenKey = "reservations" | "notifications" | "messages" | "financial" | "inspections" | "alert_settings" | "building_email";
 
 /** Screens reachable from the "More" menu, per user type. */
 export const MORE_BY_TYPE: Record<UserType, ScreenKey[]> = {
   // Super admins see everything admins see, plus Financial.
-  super_admin: ["reservations", "notifications", "alert_settings", "financial"],
-  admin: ["reservations", "notifications", "alert_settings"],
+  super_admin: ["reservations", "building_email", "notifications", "alert_settings", "financial"],
+  admin: ["reservations", "building_email", "notifications", "alert_settings"],
   owner: ["financial"],
 };
 
@@ -52,4 +52,25 @@ export function userTypeFromRoles(rows: { role: string }[] | null | undefined): 
 export function loginEmail(identifier: string) {
   const id = identifier.toLowerCase().trim();
   return id.includes("@") ? id : `${id}@arami.app`;
+}
+
+/**
+ * Edit rights for one reservation, as on the website: admins, or users with
+ * "can edit reservations". The website edits every booking, Airbnb and
+ * Booking.com included; set this to false to keep channel bookings read-only.
+ */
+export const EDIT_CHANNEL_BOOKINGS = true;
+
+export function canEditReservation(
+  perms: { isAdmin?: boolean; can_edit_reservations?: boolean } | null | undefined,
+  source: string | null | undefined,
+) {
+  if (!perms?.isAdmin && !perms?.can_edit_reservations) return false;
+  const own = !source || source === "direct" || source === "website";
+  return own || EDIT_CHANNEL_BOOKINGS;
+}
+
+/** "Email building" is for admins and super admins (the send-building-email function refuses anyone else). */
+export function canEmailBuildings(type: UserType | undefined) {
+  return type === "admin" || type === "super_admin";
 }

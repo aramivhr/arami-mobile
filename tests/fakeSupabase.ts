@@ -12,6 +12,9 @@ export interface FakeOptions {
   join?: (table: string, row: Row, select: string) => Row;
 }
 
+/** The live Supabase API returns at most this many rows per request. */
+export const MAX_ROWS = 1000;
+
 export class FakeSupabase {
   tables: Record<string, Row[]> = {};
   calls: { table: string; op: string; payload?: unknown; filters: string[] }[] = [];
@@ -117,10 +120,14 @@ export class FakeSupabase {
       let out = rows.filter(match);
       if (q.head) return { data: null, error: null, count: out.length };
       const total = out.length;
-      for (const [col, asc] of q.orders) {
+      // Applied last key first; the sort is stable, so the first order() call is the main key.
+      for (const [col, asc] of [...q.orders].reverse()) {
         out = [...out].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] ?? "") < (b[col] ?? "") ? (asc ? -1 : 1) : asc ? 1 : -1));
       }
+      if (q.rangeFrom != null) out = out.slice(q.rangeFrom, (q.rangeTo ?? q.rangeFrom) + 1);
       if (q.limitN != null) out = out.slice(0, q.limitN);
+      // Like the live API (PostgREST max rows): never more than 1000 rows per request, no error.
+      out = out.slice(0, MAX_ROWS);
       out = out.map((r) => this.project(q, r));
       return this.shape(q, out, q.countExact ? total : undefined);
     }
@@ -183,6 +190,8 @@ export class Query implements PromiseLike<any> {
   filterText: string[] = [];
   orders: [string, boolean][] = [];
   limitN: number | null = null;
+  rangeFrom: number | null = null;
+  rangeTo: number | null = null;
   mode: "single" | "maybe" | null = null;
   onConflict: string | undefined;
   ignoreDuplicates = false;
@@ -264,6 +273,11 @@ export class Query implements PromiseLike<any> {
   }
   limit(n: number) {
     this.limitN = n;
+    return this;
+  }
+  range(from: number, to: number) {
+    this.rangeFrom = from;
+    this.rangeTo = to;
     return this;
   }
   maybeSingle() {
