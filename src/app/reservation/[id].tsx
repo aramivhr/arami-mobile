@@ -4,11 +4,14 @@ import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { FileText, IdCard, MessageSquare, Users } from "lucide-react-native";
+import { Building2, FileText, IdCard, MessageSquare, Pencil, Users } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Button, Card, Divider, Input, Label, Sheet, Text } from "@/components/ui";
 import { SOURCE_LABEL, SourceBadge, StatusBadge, directPaymentLabel } from "@/components/badges";
 import { RequireScreen } from "@/components/RequireScreen";
+import { ReservationForm } from "@/components/ReservationForm";
+import { BuildingEmailSheet } from "@/components/BuildingEmailSheet";
+import { canEditReservation, canEmailBuildings } from "@/lib/access";
 import { useApartments, useBuildings, useGuestIdNumber, useReservations, useSaveGuestDetails } from "@/hooks/data";
 import { THREADS_KEY, fetchThreads } from "@/hooks/messages";
 import { findThreadForReservation } from "@/lib/threads";
@@ -20,9 +23,10 @@ import { useColors } from "@/lib/theme";
 import type { Apartment, Building, Reservation } from "@/lib/types";
 
 // One reservation, as the website's reservation details: guest, stay and booking
-// details, Message (opens the guest's conversation, channel bookings, admins
-// only) and Create PDF, which asks for the passport / ID numbers, saves them on
-// the reservation and issues the confirmation.
+// details, Edit (users with edit rights), Email building (admins), Message
+// (opens the guest's conversation, channel bookings, admins only) and Create
+// PDF, which asks for the passport / ID numbers, saves them on the reservation
+// and issues the confirmation.
 
 export default function ReservationRoute() {
   return (
@@ -42,6 +46,8 @@ function ReservationScreen() {
   const { data: perms } = useMyPermissions();
   const { data: userType } = useUserType();
   const r = useMemo(() => resQ.data?.find((x) => x.id === id), [resQ.data, id]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const apt = r ? apartments.find((a) => a.id === r.apartment_id) : undefined;
   const bld = apt ? buildings.find((b) => b.id === apt.building_id) : undefined;
 
@@ -67,6 +73,8 @@ function ReservationScreen() {
   const showFinancial = !!perms?.show_financial;
   const showContacts = !!perms?.show_contacts;
   const canMessage = fromChannel && (userType === "admin" || userType === "super_admin");
+  const canEdit = canEditReservation(perms, r.source);
+  const canEmailBuilding = canEmailBuildings(userType ?? undefined) && !!apt && !!bld && r.status !== "cancelled";
 
   return (
     <Screen onRefresh={() => resQ.refetch()} refreshing={resQ.isRefetching}>
@@ -117,7 +125,26 @@ function ReservationScreen() {
       </Card>
 
       <CreatePdf key={r.id} r={r} apt={apt} bld={bld} showFinancial={showFinancial} showContacts={showContacts} />
+      {canEdit && (
+        <Button title="Edit" variant="outline" icon={<Pencil size={16} color={c.foreground} />} onPress={() => setEditOpen(true)} />
+      )}
+      {canEmailBuilding && (
+        <Button title="Email building" variant="outline" icon={<Building2 size={16} color={c.foreground} />} onPress={() => setEmailOpen(true)} />
+      )}
       {canMessage && <MessageGuest r={r} />}
+
+      {canEdit && (
+        <ReservationForm
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          editing={r}
+          showContacts={showContacts || !!perms?.isAdmin}
+          showFinancial={showFinancial}
+        />
+      )}
+      {canEmailBuilding && apt && bld && (
+        <BuildingEmailSheet open={emailOpen} onClose={() => setEmailOpen(false)} apartment={apt} building={bld} reservation={r} />
+      )}
     </Screen>
   );
 

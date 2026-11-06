@@ -75,7 +75,12 @@ vi.mock("expo-local-authentication", () => ({
   AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2 },
 }));
 vi.mock("expo-secure-store", () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
-vi.mock("expo-image-picker", () => ({ launchCameraAsync: async () => ({ canceled: true }), launchImageLibraryAsync: async () => ({ canceled: true }), requestCameraPermissionsAsync: async () => ({ granted: true }) }));
+// A test can set globalThis.__picked to what the camera / photo library returns.
+vi.mock("expo-image-picker", () => ({
+  launchCameraAsync: async () => (globalThis as any).__picked ?? { canceled: true },
+  launchImageLibraryAsync: async () => (globalThis as any).__picked ?? { canceled: true },
+  requestCameraPermissionsAsync: async () => ({ granted: true }),
+}));
 
 vi.mock("@/lib/supabase", () => ({
   get supabase() {

@@ -78,3 +78,12 @@ writeFileSync(
   header + msgApi.slice(msgApi.indexOf("export interface Thread"), msgApi.indexOf("export interface Msg")) + msgApi.slice(msgApi.indexOf("const words =")),
 );
 writeFileSync("tests/web/sync-alert-core.ts", header + show("supabase/functions/_shared/sync-alert-core.ts"));
+const bc = show("supabase/functions/_shared/booking-confirmation.ts");
+const be = show("supabase/functions/_shared/building-email.ts");
+writeFileSync(
+  "tests/web/building-email.ts",
+  header +
+    take(bc, "export const CONTACT") + "\n\n" +
+    bc.slice(bc.indexOf("const DAYS ="), bc.indexOf("export function money(")) +
+    be.slice(be.indexOf("export const BUILDING_EMAIL_PURPOSES")),
+);

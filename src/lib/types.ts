@@ -7,6 +7,8 @@ export interface Building {
   user_id: string;
   name: string;
   address: string;
+  /** Building management's email (for "Email building"). */
+  email?: string | null;
   created_at?: string;
 }
 
@@ -21,6 +23,8 @@ export interface Apartment {
   manage_type?: "sublease" | "revenue_share" | null;
   created_at?: string;
   room_type_id?: string | null;
+  /** This unit's own building-management email; falls back to the building's. */
+  building_email?: string | null;
 }
 
 export type DirectPaymentMethod = "cash" | "payment_link" | "bank_transfer";

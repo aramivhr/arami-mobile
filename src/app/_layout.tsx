@@ -69,6 +69,7 @@ function SignedIn() {
         <Stack.Screen name="financial" options={{ title: "" }} />
         <Stack.Screen name="inspection/[id]" options={{ title: "Inspection" }} />
         <Stack.Screen name="alert-settings" options={{ title: "Phone alerts" }} />
+        <Stack.Screen name="building-email" options={{ title: "Email a building" }} />
       </Stack>
       {isAdmin && <NewBookingAlert />}
     </BiometricGate>
