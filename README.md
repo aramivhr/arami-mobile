@@ -74,7 +74,7 @@ The app uses the website's Supabase (Lovable Cloud). Its own data lives only in
 
 ## Tests
 
-`npm test` runs 15,390 generated test cases (seeded, so the same every run):
+`npm test` runs 15,398 generated test cases (seeded, so the same every run):
 
 - the app's access, login, overlap check and change summaries against the website's own code
   (copied read-only into `tests/web` by `npm run test:web-refresh`);

@@ -181,3 +181,17 @@ describe("WhatsApp message notifications (website 2026-10-16)", () => {
     expect(pushTarget({ type: "notification", ...n })).toBe("/messages");
   });
 });
+
+describe("reading more than 1000 reservations (website 2026-11-05)", () => {
+  it.each([0, 1, 999, 1000, 1001, 2500, 3000])("%i rows all arrive, once each", async (n) => {
+    const { fetchAll, PAGE_SIZE } = await import("@/lib/fetchAll");
+    const all = Array.from({ length: n }, (_, i) => ({ id: i }));
+    const calls: [number, number][] = [];
+    const rows = await fetchAll<{ id: number }>(async (from, to) => {
+      calls.push([from, to]);
+      return { data: all.slice(from, Math.min(to + 1, from + PAGE_SIZE)), error: null };
+    });
+    expect(rows.map((r) => r.id)).toEqual(all.map((r) => r.id));
+    expect(calls.length).toBe(Math.floor(n / PAGE_SIZE) + 1);
+  });
+});

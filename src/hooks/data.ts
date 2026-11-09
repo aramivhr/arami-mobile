@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/fetchAll";
+import type { ChannelCommission } from "@/lib/financial";
 import { useAuth } from "@/hooks/auth";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
@@ -33,9 +35,10 @@ export function useReservations() {
   return useQuery({
     queryKey: ["reservations"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reservations_safe").select("*").order("check_in");
-      if (error) throw error;
-      return data as Reservation[];
+      // Paged like the website: one request stops at 1000 rows, which hid every
+      // stay after the cut-off (from 7 Nov 2026 on). Ordered by id too, so no
+      // row is skipped or repeated between pages.
+      return fetchAll<Reservation>((from, to) => supabase.from("reservations_safe").select("*").order("check_in").order("id").range(from, to));
     },
   });
 }
@@ -44,9 +47,7 @@ export function useBlockedDates() {
   return useQuery({
     queryKey: ["blocked_dates"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("blocked_dates").select("*").order("start_date");
-      if (error) throw error;
-      return data as BlockedDate[];
+      return fetchAll<BlockedDate>((from, to) => supabase.from("blocked_dates").select("*").order("start_date").order("id").range(from, to));
     },
   });
 }
@@ -236,6 +237,18 @@ export function useMarkAllRead() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+/** Finance settings' commission % per channel, for bookings without a channel commission. */
+export function useChannelCommissions() {
+  return useQuery({
+    queryKey: ["channel_commissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("channel_commissions").select("channel, commission_pct").order("channel");
+      if (error) throw error;
+      return (data ?? []) as ChannelCommission[];
+    },
   });
 }
 

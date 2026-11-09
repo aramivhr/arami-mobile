@@ -7,7 +7,7 @@ import { SourceBadge, directPaymentLabel, withAlpha } from "@/components/badges"
 import { isOwnBooking } from "@/lib/labels";
 import { RangePicker } from "@/components/RangePicker";
 import { RequireScreen } from "@/components/RequireScreen";
-import { useApartmentFinance, useApartments, useBuildings, useReservations } from "@/hooks/data";
+import { useApartmentFinance, useApartments, useChannelCommissions, useBuildings, useReservations } from "@/hooks/data";
 import { useMyPermissions } from "@/hooks/permissions";
 import { computeFinancial, presets, type ManageFilter } from "@/lib/financial";
 import { parseISO } from "@/lib/dates";
@@ -38,6 +38,7 @@ function FinancialScreen() {
   const { data: apartments = [] } = useApartments();
   const { data: buildings = [] } = useBuildings();
   const { data: financeRows = [] } = useApartmentFinance();
+  const { data: commissions = [] } = useChannelCommissions();
   const thisMonth = presets()[0];
   const [range, setRange] = useState({ start: thisMonth.from, end: thisMonth.to });
   const [manage, setManage] = useState<ManageFilter>("all");
@@ -57,9 +58,9 @@ function FinancialScreen() {
   const results = useMemo(
     () =>
       range.start && range.end
-        ? computeFinancial({ reservations: resQ.data ?? [], apartments, financeRows, selected, manage, start: range.start, end: range.end })
+        ? computeFinancial({ reservations: resQ.data ?? [], apartments, financeRows, commissions, selected, manage, start: range.start, end: range.end })
         : null,
-    [resQ.data, apartments, financeRows, selected, manage, range],
+    [resQ.data, apartments, financeRows, commissions, selected, manage, range],
   );
 
   if (permsLoading) return null;
@@ -137,6 +138,12 @@ function FinancialScreen() {
         <>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
             <Stat title="Total Revenue" value={aed(results.totalAmount)} subtitle={`${results.breakdown.length} reservation(s)`} icon={<Text weight="bold" size={10} style={{ color: c.accent }}>AED</Text>} />
+            <Stat
+              title="Net Payout"
+              value={aed(Math.round(results.totalNet))}
+              subtitle={`${aed(Math.round(results.totalCommission))} commission & charges`}
+              icon={<Text weight="bold" size={10} style={{ color: c.accent }}>AED</Text>}
+            />
             <Stat title="Check-ins" value={String(results.totalCheckIns)} subtitle="In selected period" icon={<LogIn size={14} color={c.accent} />} />
             <Stat title="Occupancy" value={`${results.occupancy.toFixed(1)}%`} subtitle={`${results.bookedNights}/${results.capacity} nights`} icon={<Percent size={14} color={c.accent} />} />
           </View>
@@ -159,6 +166,11 @@ function FinancialScreen() {
                   <Text weight="bold" numberOfLines={1}>
                     {aed(results.bySource[key] || 0)}
                   </Text>
+                  {(results.bySource[key] || 0) > 0 && (
+                    <Text muted size={10} numberOfLines={1}>
+                      net {aed(Math.round(results.netBySource[key] || 0))}
+                    </Text>
+                  )}
                 </View>
               </Card>
             ))}
@@ -189,7 +201,7 @@ function FinancialScreen() {
             {results.breakdown.length === 0 ? (
               <Empty>No reservations found in this period.</Empty>
             ) : (
-              results.breakdown.map(({ reservation: r, proRatedAmount, proRatedDays }) => (
+              results.breakdown.map(({ reservation: r, proRatedAmount, proRatedNet, proRatedDays }) => (
                 <View key={r.id}>
                   <Divider />
                   <View style={{ padding: 14, gap: 4 }}>
@@ -206,6 +218,9 @@ function FinancialScreen() {
                     </Text>
                     <Text muted size={12}>
                       {dotted(r.check_in)} – {dotted(r.check_out)} · {proRatedDays} day(s) in period · full price {aed(r.total_price)}
+                    </Text>
+                    <Text muted size={12}>
+                      Net payout {aed(proRatedNet)}
                     </Text>
                   </View>
                 </View>
