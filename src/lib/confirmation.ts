@@ -1,5 +1,5 @@
 import { COMPANY_ADDRESS, COMPANY_NAME, COMPANY_PHONE, COMPANY_WEBSITE, reservationNumber } from "@/lib/company";
-import { SOURCE_LABEL, directPaymentLabel } from "@/lib/labels";
+import { SOURCE_LABEL, directPaymentLabel, isOwnBooking } from "@/lib/labels";
 import { money, nightsBetween, prettyDate } from "@/lib/dates";
 import type { Apartment, Building, Reservation } from "@/lib/types";
 
@@ -34,7 +34,7 @@ export function confirmationHtml(p: {
   const row = (label: string, value: string, bold = false) =>
     `<tr><td class="l">${esc(label)}</td><td class="v${bold ? " b" : ""}">${esc(value || "—")}</td></tr>`;
   const section = (title: string, rows: string) => `<h3>${esc(title)}</h3><table>${rows}</table>`;
-  const isDirect = (r.source ?? "direct") === "direct";
+  const isDirect = isOwnBooking(r.source);
   return `<!doctype html><html><head><meta charset="utf-8"/><style>
   @page { margin: 0; }
   body { font-family: Helvetica, Arial, sans-serif; margin: 0; color: #0f172a; }

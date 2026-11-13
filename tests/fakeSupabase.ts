@@ -261,11 +261,18 @@ export class Query implements PromiseLike<any> {
     if (op === "is" && v === null) return this.add(`${c}=not.is.null`, (r) => r[c] != null);
     throw new Error(`fake: unsupported not(${op})`);
   }
-  /** Supports the "a.in.(x,y),b.in.(z)" form. */
+  /** Supports "a.in.(x,y)", "a.is.null" and "a.not.like.prefix*" terms, comma-separated. */
   or(expr: string) {
-    const parts = [...expr.matchAll(/(\w+)\.in\.\(([^)]*)\)/g)].map((m) => [m[1], m[2].split(",")] as const);
-    if (!parts.length) throw new Error(`fake: unsupported or(${expr})`);
-    return this.add(`or=(${expr})`, (r) => parts.some(([c, vs]) => vs.includes(String(r[c]))));
+    const terms = expr.split(/,(?![^()]*\))/).map((t): ((r: Row) => boolean) => {
+      let m = t.match(/^(\w+)\.in\.\(([^)]*)\)$/);
+      if (m) { const [c, vs] = [m[1], m[2].split(",")]; return (r) => vs.includes(String(r[c])); }
+      m = t.match(/^(\w+)\.is\.null$/);
+      if (m) { const c = m[1]; return (r) => r[c] == null; }
+      m = t.match(/^(\w+)\.not\.like\.([^*]*)\*$/);
+      if (m) { const [c, p] = [m[1], m[2]]; return (r) => r[c] != null && !String(r[c]).startsWith(p); }
+      throw new Error(`fake: unsupported or(${expr})`);
+    });
+    return this.add(`or=(${expr})`, (r) => terms.some((f) => f(r)));
   }
   order(c: string, o: { ascending?: boolean } = {}) {
     this.orders.push([c, o.ascending !== false]);

@@ -26,7 +26,7 @@ function makeRes(r: ReturnType<typeof import("./rand").rng>, i: number): Reserva
     check_out: d.toISOString().slice(0, 10),
     status: r.pick(STATUSES),
     total_price: r.pick([0, 1200, 1200.5, 99999]),
-    source: r.pick(["direct", "airbnb", "booking"] as const),
+    source: r.pick(["direct", "airbnb", "booking", "website"] as const),
     adults: r.pick([null, 1, 2]),
     children: r.pick([null, 0, 1]),
     infants: r.pick([null, 0]),

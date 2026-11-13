@@ -50,8 +50,8 @@ describe("Confirmation PDF", () => {
     expect(html).toContain(row("Check-out", prettyDate(r.check_out)));
     expect(html).toContain(row("Nights", String(nightsBetween(r.check_in, r.check_out))));
     expect(html).toContain(row("Status", r.status));
-    expect(html).toContain(row("Booking source", { booking: "Booking.com", airbnb: "Airbnb", direct: "Direct" }[r.source]));
-    const direct = r.source === "direct";
+    expect(html).toContain(row("Booking source", ({ booking: "Booking.com", airbnb: "Airbnb", direct: "Direct", website: "Website" } as Record<string, string>)[r.source]));
+    const direct = r.source === "direct" || r.source === "website";
     expect(html.includes(`<td class="l">Payment method</td>`)).toBe(direct && !!r.direct_payment_method);
     expect(html.includes(row("Total amount", money(Number(r.total_price)), true))).toBe(c.fin);
     expect(html.includes(row("Amount paid", money(Number(r.total_price))))).toBe(c.fin && !direct);

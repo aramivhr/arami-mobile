@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { fetchAll } from "@/lib/fetchAll";
+import type { ChannelCommission } from "@/lib/financial";
 import { useAuth } from "@/hooks/auth";
 import { useUserType } from "@/hooks/permissions";
-import { fetchAll } from "@/lib/fetchAll";
 import { buildOverbookings, type IntakeRow, type MappingRow } from "@/lib/overbookings";
 import type { AppNotification, Apartment, BlockedDate, Building, Reservation } from "@/lib/types";
 
@@ -255,6 +256,10 @@ export function getOverlappingReservations(
 
 // ---- Notifications (the website's in-app notification list) ----
 
+// Like the website's Notifications page ("general" scope): WhatsApp messages have
+// their own bell on the website and aren't listed or marked read here.
+const GENERAL_SCOPE = "dedupe_key.is.null,dedupe_key.not.like.whatsapp:*";
+
 export function useNotifications() {
   const { user } = useAuth();
   return useQuery({
@@ -265,6 +270,7 @@ export function useNotifications() {
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
+        .or(GENERAL_SCOPE)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -306,10 +312,22 @@ export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("notifications").update({ read: true }).eq("read", false);
+      const { error } = await supabase.from("notifications").update({ read: true }).or(GENERAL_SCOPE).eq("read", false);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+/** Finance settings' commission % per channel, for bookings without a channel commission. */
+export function useChannelCommissions() {
+  return useQuery({
+    queryKey: ["channel_commissions"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("channel_commissions").select("channel, commission_pct").order("channel");
+      if (error) throw error;
+      return (data ?? []) as ChannelCommission[];
+    },
   });
 }
 

@@ -21,18 +21,25 @@ describe("Financial numbers match the website's Financial page", () => {
     const apartments = ["a1", "a2", "a3", "a4"].map((id) => ({ id, manage_type: r.pick(["sublease", "revenue_share", null] as const) }));
     const reservations: Reservation[] = Array.from({ length: r.int(0, 15) }, (_, i) => {
       const ci = r.iso(2026, 2026);
-      const source = r.pick(["booking", "airbnb", "direct"] as const);
+      const source = r.pick(["booking", "airbnb", "direct", "website"] as const);
       return {
         id: `r${i}`, user_id: "u", apartment_id: r.pick(apartments).id, guest_name: "G", guest_email: "", guest_phone: "",
         check_in: ci, check_out: shift(ci, r.pick([0, 1, 2, 3, 7, 14, 31, 60])), status: r.pick(["confirmed", "pending", "cancelled", "checked-out"] as const),
         total_price: r.pick([0, 450, 1000, 1234.56, 9999.99, 37000]), source,
-        direct_payment_method: source === "direct" ? r.pick(["cash", "payment_link", "bank_transfer", null] as const) : null,
+        // Channel commission as Channex sends it, sometimes missing (falls back to the settings %).
+        ota_commission: r.pick([null, null, 0, 45.5, 150, 1234.56]),
+        amount_before_tax: r.pick([null, 900, 1000, 1234.56, 37000]),
+        direct_payment_method: source === "direct" || source === "website" ? r.pick(["cash", "payment_link", "bank_transfer", null] as const) : null,
       };
     });
     const financeRows = apartments.filter(() => r.bool(0.5)).map((a) => ({ apartment_id: a.id, contract_end: r.bool(0.5) ? r.iso(2026, 2026) : null }));
     const start = r.iso(2026, 2026);
+    const commissions = [
+      { channel: "booking", commission_pct: r.pick([0, 15, 17.5]) },
+      { channel: r.pick(["airbnb", "Airbnb"]), commission_pct: r.pick([0, 3, 15.5]) },
+    ].filter(() => r.bool(0.8));
     return {
-      apartments, reservations, financeRows,
+      apartments, reservations, financeRows, commissions,
       selected: apartments.filter(() => r.bool(0.3)).map((a) => a.id),
       manage: r.pick(["all", "all", "sublease", "revenue_share"] as ManageFilter[]),
       start, end: shift(start, r.pick([1, 7, 28, 30, 31, 90, 365])),
@@ -60,8 +67,12 @@ describe("Financial numbers match the website's Financial page", () => {
     expect(app.bookedNights).toBe(web.bookedNights);
     expect(app.capacity).toBe(web.capacity);
     expect(app.occupancy).toBe(web.occupancy);
-    expect(app.breakdown.map((b) => [b.reservation.id, b.proRatedAmount, b.proRatedDays, b.isCheckIn])).toEqual(
-      web.breakdown.map((b: any) => [b.reservation.id, b.proRatedAmount, b.proRatedDays, b.isCheckIn]),
+    // Net payout (website 2026-11-07): commission and the 2.5% bank fee.
+    expect(app.totalNet).toBe(web.totalNet);
+    expect(app.totalCommission).toBe(web.totalCommission);
+    expect(app.netBySource).toEqual(web.netBySource);
+    expect(app.breakdown.map((b) => [b.reservation.id, b.proRatedAmount, b.proRatedNet, b.proRatedDays, b.isCheckIn])).toEqual(
+      web.breakdown.map((b: any) => [b.reservation.id, b.proRatedAmount, b.proRatedNet, b.proRatedDays, b.isCheckIn]),
     );
   });
 });

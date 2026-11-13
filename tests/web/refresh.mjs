@@ -55,15 +55,18 @@ const finBody = fin.slice(bodyStart, bodyEnd).replace(/\n\s*\/\/ eslint-disable-
 writeFileSync(
   "tests/web/financial.ts",
   header +
-    `import { format, differenceInDays, max as dateMax, min as dateMin } from "date-fns";\n\n` +
+    `import { format, differenceInDays, max as dateMax, min as dateMin } from "date-fns";\n` +
+    `import { stayPayout, chargesNote } from "./apartment-finance";\n\n` +
     takeBlock(fin, "function computeProRatedAmount(") + "\n\n" +
     `/** The website Financial page's numbers, with its component state passed in. */\n` +
-    `export function webFinancial({ reservations, apartments, financeRows, selectedApartments, manageFilter, startDate, endDate }) {\n` +
+    `export function webFinancial({ reservations, apartments, financeRows, commissions = [] as any[], selectedApartments, manageFilter, startDate, endDate }) {\n` +
     `  const isAllSelected = selectedApartments.length === 0;\n` +
     `  const scopedApartments = manageFilter === "all" ? apartments : apartments.filter((a) => a.manage_type === manageFilter);\n` +
     `  const scopedIdSet = new Set(scopedApartments.map((a) => a.id));\n` +
     finBody + "}\n",
 );
+// Net payout (commission and the 2.5% bank fee), used by the Financial page.
+writeFileSync("tests/web/apartment-finance.ts", header + show("src/lib/apartment-finance.ts"));
 writeFileSync("tests/web/mobile-push-dispatch.ts", header + show("supabase/functions/mobile-push-dispatch/index.ts"));
 writeFileSync("tests/web/mobile-inspection-complete.ts", header + show("supabase/functions/mobile-inspection-complete/index.ts"));
 console.log("web oracle refreshed from", commit);
