@@ -1,13 +1,14 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
-import { Building2, FileText, IdCard, MessageSquare, Pencil, Users } from "lucide-react-native";
+import { AlertTriangle, Building2, FileText, IdCard, MessageSquare, Pencil, Users } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Button, Card, Divider, Input, Label, Sheet, Text } from "@/components/ui";
-import { SOURCE_LABEL, SourceBadge, StatusBadge, directPaymentLabel } from "@/components/badges";
+import { SOURCE_LABEL, SourceBadge, StatusBadge, directPaymentLabel, withAlpha } from "@/components/badges";
+import { overlapGroup } from "@/lib/calendar-overlaps";
 import { RequireScreen } from "@/components/RequireScreen";
 import { ReservationForm } from "@/components/ReservationForm";
 import { BuildingEmailSheet } from "@/components/BuildingEmailSheet";
@@ -46,6 +47,9 @@ function ReservationScreen() {
   const { data: perms } = useMyPermissions();
   const { data: userType } = useUserType();
   const r = useMemo(() => resQ.data?.find((x) => x.id === id), [resQ.data, id]);
+  // An overbooking: every stay on the same unit on the same nights, as tabs,
+  // oldest first and the overbooking last (same as the website).
+  const overlapping = useMemo(() => (r && resQ.data ? overlapGroup(resQ.data, r) : []), [resQ.data, r]);
   const [editOpen, setEditOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const apt = r ? apartments.find((a) => a.id === r.apartment_id) : undefined;
@@ -78,6 +82,52 @@ function ReservationScreen() {
 
   return (
     <Screen onRefresh={() => resQ.refetch()} refreshing={resQ.isRefetching}>
+      {overlapping.length > 1 && (
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <AlertTriangle size={14} color={c.destructive} />
+            <Text size={13} weight="semibold" style={{ color: c.destructive }}>
+              Overbooking: {overlapping.length} reservations on the same nights
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, padding: 4, borderRadius: 10, backgroundColor: c.muted }}>
+            {overlapping.map((o, i) => {
+              const active = o.id === r.id;
+              const last = i === overlapping.length - 1;
+              return (
+                <Pressable
+                  key={o.id}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => router.setParams({ id: o.id })}
+                  style={{ flexGrow: 1, flexBasis: "45%", paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8, backgroundColor: active ? c.card : undefined }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    {last && <AlertTriangle size={11} color={c.destructive} />}
+                    <Text size={12} weight={active ? "bold" : "medium"} numberOfLines={1} style={last ? { color: c.destructive } : undefined}>
+                      {(o.guest_name ?? "Guest").split(" ")[0]}
+                    </Text>
+                  </View>
+                  <Text muted size={11} numberOfLines={1}>
+                    {prettyDate(o.check_in)} – {prettyDate(o.check_out)}
+                    {last ? " · overbooking" : ""}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+      {r.is_overbooking && (
+        <View style={{ borderRadius: 8, borderWidth: 1, borderColor: withAlpha(c.destructive, 0.4), backgroundColor: withAlpha(c.destructive, 0.08), padding: 12, gap: 4 }}>
+          <Text weight="semibold" style={{ color: c.destructive }}>
+            Overbooking
+          </Text>
+          <Text size={13} style={{ color: c.destructive }}>
+            {r.overbooking_note || "The listing this guest booked had no free unit for these dates."}
+          </Text>
+        </View>
+      )}
       <Card style={{ padding: 16, gap: 12 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <SourceBadge source={r.source || "direct"} />
