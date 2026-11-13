@@ -57,6 +57,9 @@ export interface Reservation {
   amount_before_tax?: number | null;
   tax?: number | null;
   ota_commission?: number | null;
+  /** The booked listing had no free unit for these dates; see overbooking_note. */
+  is_overbooking?: boolean | null;
+  overbooking_note?: string | null;
   created_at?: string;
 }
 

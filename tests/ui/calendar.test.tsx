@@ -88,13 +88,26 @@ describe("Calendar", () => {
     const all = admin ? buildOverbookings(c.intake as any, MAPPINGS, APARTMENTS, c.reservations) : [];
     const shown = all.filter((o) => !(o.checkOut <= start || o.checkIn > end));
     expect(r.root.findAll((x) => (x.type as unknown) === "Text" && x.children.join("") === "Overbooking")).toHaveLength(shown.length);
-    expect(text.includes("Overbooking (no free unit)")).toBe(all.length > 0);
+    // Two live stays on one unit on a night in view are an overbooking on that unit's row.
+    const liveStays = c.reservations.filter((x) => x.status !== "cancelled");
+    const overlapInView = liveStays.some((x) =>
+      liveStays.some(
+        (y) =>
+          y !== x &&
+          y.apartment_id === x.apartment_id &&
+          (x.check_in > y.check_in ? x.check_in : y.check_in) <= end &&
+          (x.check_out < y.check_out ? x.check_out : y.check_out) > start &&
+          (x.check_in > y.check_in ? x.check_in : y.check_in) < (x.check_out < y.check_out ? x.check_out : y.check_out),
+      ),
+    );
+    expect(text.includes("Overbooking (tap to see every stay)")).toBe(all.length > 0 || overlapInView);
+    if (overlapInView) expect(text).toContain("OVERBOOKING · ");
     for (const o of shown) expect(text).toContain(`OVERBOOKING · ${o.guestName}`);
 
     // Booking bars: price first with the financial permission, name only otherwise.
     const fin = c.role === "admin" || c.fin;
     // (Only stays that don't overlap another stay in the same unit: like the
-    // website, an overlapping stay is drawn under the first one.)
+    // website, overlapping nights show the overbooking label instead.)
     const live = c.reservations.filter((x) => x.status !== "cancelled");
     const clash = (x: (typeof live)[number]) => live.some((y) => y !== x && y.apartment_id === x.apartment_id && y.check_in < x.check_out && x.check_in < y.check_out);
     for (const x of live.filter((x) => x.check_in >= start && x.check_in <= end && !clash(x))) {

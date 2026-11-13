@@ -21,6 +21,7 @@ import { useMyPermissions } from "@/hooks/permissions";
 import { useColors } from "@/lib/theme";
 import { calendarDays, dateStr, daysInMonth, formatAmount, formatMonth, nightsBetween, todayScrollX, type CalendarDay } from "@/lib/dates";
 import type { Apartment, BlockedDate, Reservation } from "@/lib/types";
+import { dayCell as overlapCell } from "@/lib/calendar-overlaps";
 
 // The website's calendar grid (units down the side, days across), sized for a
 // phone: about two weeks are visible and the rest scrolls sideways. Same colors,
@@ -37,6 +38,8 @@ type DayStatus =
   | { type: "available" }
   | { type: "reserved"; res: Reservation }
   | { type: "split"; checkout: Reservation; checkin: Reservation }
+  /** More than one stay that night: an overbooking. `stays` oldest first, the overbooking (shown) last. */
+  | { type: "overlap"; stays: Reservation[] }
   | { type: "blocked"; block: BlockedDate };
 
 export default function CalendarScreen() {
@@ -110,13 +113,22 @@ export default function CalendarScreen() {
     return out;
   }, [overbookings, apartments, building, rangeStart, rangeEnd]);
 
+  const byApt = useMemo(() => {
+    const m = new Map<string, Reservation[]>();
+    for (const r of reservations) {
+      if (r.status === "cancelled") continue;
+      m.set(r.apartment_id, [...(m.get(r.apartment_id) ?? []), r]);
+    }
+    return m;
+  }, [reservations]);
+
+  // Same rules as the website: one row per unit, and nights with more than one
+  // stay are an overbooking shown in red on that row.
   const statusFor = (aptId: string, ds: string): DayStatus => {
-    const active = reservations.filter((r) => r.apartment_id === aptId && r.status !== "cancelled");
-    const checkout = active.find((r) => r.check_out === ds);
-    const checkin = active.find((r) => r.check_in === ds);
-    if (checkout && checkin && checkout.id !== checkin.id) return { type: "split", checkout, checkin };
-    const res = active.find((r) => ds >= r.check_in && ds < r.check_out);
-    if (res) return { type: "reserved", res };
+    const cell = overlapCell(byApt.get(aptId) ?? [], ds);
+    if (cell.type === "overlap") return { type: "overlap", stays: cell.stays };
+    if (cell.type === "split") return { type: "split", checkout: cell.checkout, checkin: cell.checkin };
+    if (cell.type === "reserved") return { type: "reserved", res: cell.stay };
     const blk = blocked.find((b) => b.apartment_id === aptId && ds >= b.start_date && ds <= b.end_date);
     if (blk) return { type: "blocked", block: blk };
     return { type: "available" };
@@ -142,6 +154,12 @@ export default function CalendarScreen() {
   };
 
   const openReservation = (r: Reservation) => router.push({ pathname: "/reservation/[id]", params: { id: r.id } });
+  const barColor = (r: Reservation) => (r.is_overbooking ? c.destructive : c.booked);
+  const overbookingInView = useMemo(
+    () => apartments.some((a) => days.some((d) => statusFor(a.id, d.ds).type === "overlap")) || reservations.some((r) => r.is_overbooking && r.status !== "cancelled" && r.check_out > rangeStart && r.check_in <= rangeEnd),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [apartments, days, byApt, blocked, reservations, rangeStart, rangeEnd],
+  );
 
   const label = (r: Reservation) => {
     const nights = nightsBetween(r.check_in, r.check_out);
@@ -315,16 +333,39 @@ export default function CalendarScreen() {
                       if (s.type === "split") {
                         return (
                           <View key={d} style={{ width: colW, flexDirection: "row", gap: 2, paddingVertical: 3 }}>
-                            <Pressable onPress={() => openReservation(s.checkout)} style={{ flex: 1, backgroundColor: c.booked, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
-                            <Pressable onPress={() => openReservation(s.checkin)} style={{ flex: 1, backgroundColor: c.booked, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
+                            <Pressable onPress={() => openReservation(s.checkout)} style={{ flex: 1, backgroundColor: barColor(s.checkout), borderTopRightRadius: 6, borderBottomRightRadius: 6 }} />
+                            <Pressable onPress={() => openReservation(s.checkin)} style={{ flex: 1, backgroundColor: barColor(s.checkin), borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} />
                           </View>
                         );
                       }
-                      if (s.type === "reserved") {
-                        const isStart = ds === s.res.check_in || i === 0;
-                        const next = statuses[i + 1];
-                        const isEnd = i === days.length - 1 || !next || next.type !== "reserved" || next.res.id !== s.res.id;
+                      if (s.type === "overlap") {
+                        const shown = s.stays[s.stays.length - 1];
                         const prev = statuses[i - 1];
+                        const next = statuses[i + 1];
+                        const isStart = prev?.type !== "overlap";
+                        const isEnd = next?.type !== "overlap";
+                        return (
+                          <Pressable
+                            key={d}
+                            onPress={() => openReservation(shown)}
+                            accessibilityLabel={`Overbooking: ${s.stays.map((x) => x.guest_name).join(" and ")}`}
+                            style={{
+                              width: colW,
+                              marginVertical: 3,
+                              backgroundColor: c.destructive,
+                              borderTopLeftRadius: isStart ? 6 : 0,
+                              borderBottomLeftRadius: isStart ? 6 : 0,
+                              borderTopRightRadius: isEnd ? 6 : 0,
+                              borderBottomRightRadius: isEnd ? 6 : 0,
+                            }}
+                          />
+                        );
+                      }
+                      if (s.type === "reserved") {
+                        const next = statuses[i + 1];
+                        const prev = statuses[i - 1];
+                        const isStart = ds === s.res.check_in || i === 0 || prev?.type === "overlap";
+                        const isEnd = i === days.length - 1 || !next || next.type !== "reserved" || next.res.id !== s.res.id;
                         return (
                           <Pressable
                             key={d}
@@ -332,7 +373,7 @@ export default function CalendarScreen() {
                             style={{
                               width: colW,
                               marginVertical: 3,
-                              backgroundColor: c.booked,
+                              backgroundColor: barColor(s.res),
                               borderTopLeftRadius: isStart && prev?.type !== "split" ? 6 : 0,
                               borderBottomLeftRadius: isStart && prev?.type !== "split" ? 6 : 0,
                               borderTopRightRadius: isEnd && next?.type !== "split" ? 6 : 0,
@@ -357,9 +398,28 @@ export default function CalendarScreen() {
 
                     {/* Guest labels drawn over the bars, starting on the check-in day */}
                     {statuses.map((s, i) => {
+                      if (s.type === "overlap") {
+                        if (statuses[i - 1]?.type === "overlap") return null;
+                        const shown = s.stays[s.stays.length - 1];
+                        let span = 1;
+                        while (span < 4 && statuses[i + span]?.type === "overlap") span++;
+                        return (
+                          <View
+                            key={`l${i}`}
+                            pointerEvents="none"
+                            style={{ position: "absolute", left: i * colW + 3, top: 0, height: ROW_H, width: Math.max(span, 2) * colW - 6, flexDirection: "row", alignItems: "center", gap: 3, overflow: "hidden", zIndex: 2 }}
+                          >
+                            <AlertTriangle size={11} color="#fff" />
+                            <Text size={10} weight="bold" numberOfLines={1} style={{ color: "#fff", flexShrink: 1 }}>
+                              OVERBOOKING · {(shown.guest_name ?? "Guest").split(" ")[0]}
+                            </Text>
+                          </View>
+                        );
+                      }
                       const res = s.type === "reserved" ? s.res : s.type === "split" ? s.checkin : null;
-                      if (!res || res.check_in !== days[i].ds) return null;
-                      const span = Math.min(nightsBetween(res.check_in, res.check_out), 4);
+                      const afterOverlap = s.type === "reserved" && statuses[i - 1]?.type === "overlap" && res && res.check_out > days[i].ds;
+                      if (!res || (res.check_in !== days[i].ds && !afterOverlap)) return null;
+                      const span = Math.min(nightsBetween(days[i].ds < res.check_in ? res.check_in : days[i].ds, res.check_out), 4);
                       const left = i * colW + (s.type === "split" ? colW / 2 + 1 : 2);
                       return (
                         <View
@@ -367,9 +427,9 @@ export default function CalendarScreen() {
                           pointerEvents="none"
                           style={{ position: "absolute", left, top: 0, height: ROW_H, width: span * colW - 4, flexDirection: "row", alignItems: "center", gap: 3, overflow: "hidden" }}
                         >
-                          <SourceBadge source={res.source || "direct"} size="sm" />
+                          {res.is_overbooking ? <AlertTriangle size={11} color="#fff" /> : <SourceBadge source={res.source || "direct"} size="sm" />}
                           <Text size={10} weight="semibold" numberOfLines={1} style={{ color: "#fff", flexShrink: 1 }}>
-                            {label(res)}
+                            {res.is_overbooking ? "OVERBOOKING · " : ""}{label(res)}
                           </Text>
                         </View>
                       );
@@ -394,8 +454,8 @@ export default function CalendarScreen() {
             }
             label="Checkout / Check-in"
           />
-          {overbookings.length > 0 && (
-            <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: c.destructive }} />} label="Overbooking (no free unit)" />
+          {(overbookings.length > 0 || overbookingInView) && (
+            <Legend swatch={<View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: c.destructive }} />} label="Overbooking (tap to see every stay)" />
           )}
         </View>
       </View>
