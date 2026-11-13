@@ -1,6 +1,6 @@
 import { COMPANY_ADDRESS, COMPANY_NAME, COMPANY_PHONE, COMPANY_WEBSITE } from "@/lib/company";
 import { dateTime, prettyDate } from "@/lib/dates";
-import { KEYS_ROOM, withKeysSection } from "@/lib/inspectionDraft";
+import { KEYS_ROOM, isOptionalItem, withKeysSection } from "@/lib/inspectionDraft";
 import type { Inspection, InspectionResult, InspectionTemplate } from "@/lib/types";
 
 // HTML for the shareable inspection report PDF (printed with expo-print).
@@ -29,12 +29,15 @@ export function inspectionReportHtml({
   unit,
   template,
   photoUrls,
+  inspectedBy = null,
 }: {
   insp: Inspection;
   unit: string;
   template: InspectionTemplate | null;
   /** storage path -> viewable link */
   photoUrls: Record<string, string>;
+  /** Who submitted it; only given when a super admin makes the PDF. */
+  inspectedBy?: string | null;
 }) {
   const issues = insp.results.filter((r) => r.condition !== "ok");
   const rooms = template?.rooms?.length
@@ -64,6 +67,8 @@ export function inspectionReportHtml({
       const rows = names
         .map((item) => {
           const r = insp.results.find((x) => x.room === room && x.item === item);
+          // An optional item (bedroom TV) appears only once someone checked it.
+          if (!r && isOptionalItem(room, item)) return "";
           const c = r ? CONDITION[r.condition] : null;
           return `<tr><td>${esc(item)}</td><td style="color:${c?.color ?? "#64748b"}">${r ? esc(conditionText(r)) : "Not checked"}</td><td>${esc(r?.note)}</td></tr>`;
         })
@@ -94,7 +99,7 @@ export function inspectionReportHtml({
   <tr><td>Guest</td><td>${esc(insp.guest_name ?? "—")}</td></tr>
   <tr><td>Stay</td><td>${insp.check_in ? prettyDate(insp.check_in) : "—"} – ${insp.check_out ? prettyDate(insp.check_out) : "—"}</td></tr>
   <tr><td>Completed</td><td>${insp.completed_at ? dateTime(insp.completed_at) : "Not finished"}</td></tr>
-  <tr><td>Result</td><td>${insp.damage_found ? '<b style="color:#dc2626">Damage or missing items found</b>' : issues.length ? "Cleaning needed" : "All OK"}</td></tr>
+${inspectedBy ? `  <tr><td>Submitted by</td><td>${esc(inspectedBy)}</td></tr>\n` : ""}  <tr><td>Result</td><td>${insp.damage_found ? '<b style="color:#dc2626">Damage or missing items found</b>' : issues.length ? "Cleaning needed" : "All OK"}</td></tr>
 </table>
 ${insp.summary ? `<h2>Report</h2><div class="summary">${esc(insp.summary)}</div>` : ""}
 ${insp.general_notes ? `<h2>Notes</h2><div class="summary">${esc(insp.general_notes)}</div>` : ""}

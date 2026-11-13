@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { Bell } from "lucide-react-native";
 import { Text } from "@/components/ui";
 import { useColors } from "@/lib/theme";
-import { useNotifications } from "@/hooks/data";
+import { useUnreadCount } from "@/hooks/data";
 import { useUserType } from "@/hooks/permissions";
 import { canSeeScreen } from "@/lib/access";
 
@@ -15,12 +15,15 @@ export function Screen({
   refreshing = false,
   contentStyle,
   scroll = true,
+  stickyHeaderIndices,
 }: {
   children: React.ReactNode;
   onRefresh?: () => void;
   refreshing?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   scroll?: boolean;
+  /** Children (by position) that stay pinned to the top while scrolling, e.g. the calendar's date row. */
+  stickyHeaderIndices?: number[];
 }) {
   const c = useColors();
   const inner: StyleProp<ViewStyle> = [{ padding: 14, gap: 16, width: "100%", maxWidth: 900, alignSelf: "center" }, contentStyle];
@@ -31,6 +34,7 @@ export function Screen({
       contentContainerStyle={inner}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} /> : undefined}
       keyboardShouldPersistTaps="handled"
+      stickyHeaderIndices={stickyHeaderIndices}
     >
       {children}
     </ScrollView>
@@ -54,9 +58,8 @@ export function HeaderBell() {
   const c = useColors();
   const { data: type } = useUserType();
   const allowed = canSeeScreen(type, "notifications");
-  const { data = [] } = useNotifications();
+  const { data: unread = 0 } = useUnreadCount();
   if (!allowed) return null;
-  const unread = data.filter((n) => !n.read).length;
   return (
     <Pressable onPress={() => router.push("/notifications")} hitSlop={10} style={{ padding: 6, marginRight: 8 }} accessibilityLabel="Notifications">
       <Bell size={20} color={c.foreground} />

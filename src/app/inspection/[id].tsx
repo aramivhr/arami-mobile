@@ -11,6 +11,7 @@ import { Badge, Button, Card, Input, Label, Text } from "@/components/ui";
 import { withAlpha } from "@/components/badges";
 import { RequireScreen } from "@/components/RequireScreen";
 import { useAuth } from "@/hooks/auth";
+import { nameOf, useIsSuperAdmin, useStaffNames } from "@/hooks/staff";
 import {
   issuesOf,
   keepPhoto,
@@ -28,7 +29,7 @@ import {
   type Draft,
 } from "@/hooks/inspections";
 import { conditionText, inspectionReportHtml } from "@/lib/inspectionReport";
-import { KEYS_ROOM, applyResult, keyOf, markRestOk, progress, withKeysSection } from "@/lib/inspectionDraft";
+import { KEYS_ROOM, applyResult, isOptionalItem, keyOf, markRestOk, progress, requiredItems, withKeysSection } from "@/lib/inspectionDraft";
 import { dateTime, prettyDate } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
 import type { Inspection, InspectionResult, ItemCondition } from "@/lib/types";
@@ -76,6 +77,9 @@ function InspectionScreen() {
   const prevQ = usePreviousInspection(insp);
   const units = useUnitLabel();
   const unit = insp ? units.label(insp.apartment_id) : "";
+  // Super admins see who submitted (or started) the inspection.
+  const superAdmin = useIsSuperAdmin();
+  const names = useStaffNames(superAdmin).data;
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [hasLocal, setHasLocal] = useState(false);
@@ -184,7 +188,8 @@ function InspectionScreen() {
     const missing = total - checked;
     const go = async () => {
       if (!id || !draft) return;
-      const next = { ...draft, complete: true };
+      // Whoever presses Finish is recorded as the one who submitted it.
+      const next = { ...draft, complete: true, inspector_id: user?.id ?? draft.inspector_id };
       setDraft(next);
       setHasLocal(true);
       await saveDraft(id, next);
@@ -218,6 +223,8 @@ function InspectionScreen() {
   const finishing = draft.complete;
   const readOnly = done || finishing;
   const issues = issuesOf(draft.results);
+  // A saved inspection's submitter is what Supabase has; one finishing on this phone is yours.
+  const submitter = done ? insp.inspector_id : draft.inspector_id;
 
   return (
     <Screen onRefresh={hasLocal ? undefined : () => q.refetch().then((r) => r.data && setDraft(fromServer(r.data, user?.id ?? null)))} refreshing={q.isRefetching}>
@@ -245,6 +252,11 @@ function InspectionScreen() {
             Completed {dateTime(insp.completed_at)}
           </Text>
         )}
+        {superAdmin && !!insp.inspector_id && (
+          <Text muted size={12}>
+            {done ? "Submitted by" : "Started by"} {nameOf(names, insp.inspector_id, user?.id)}
+          </Text>
+        )}
         {!readOnly && (
           <View style={{ gap: 6, marginTop: 4 }}>
             <View style={{ height: 6, borderRadius: 3, backgroundColor: c.muted, overflow: "hidden" }}>
@@ -257,11 +269,13 @@ function InspectionScreen() {
         )}
       </Card>
 
-      {readOnly && <ReportView insp={insp} draft={draft} unit={unit} />}
+      {readOnly && <ReportView insp={insp} draft={draft} unit={unit} inspectedBy={superAdmin && submitter ? nameOf(names, submitter, user?.id) : null} />}
 
       {!readOnly &&
         rooms.map(({ room, items }) => {
-          const roomChecked = items.filter((i) => byKey.has(keyOf(room, i))).length;
+          // Optional items (bedroom TV) don't count towards the room being done.
+          const required = requiredItems(room, items);
+          const roomChecked = required.filter((i) => byKey.has(keyOf(room, i))).length;
           const roomIssues = items.filter((i) => (byKey.get(keyOf(room, i))?.condition ?? "ok") !== "ok").length;
           const expanded = openRoom === room;
           return (
@@ -273,18 +287,19 @@ function InspectionScreen() {
                 </Text>
                 {roomIssues > 0 && <Badge label={`${roomIssues} issue${roomIssues === 1 ? "" : "s"}`} color={c.destructive} bg={withAlpha(c.destructive, 0.12)} />}
                 <Text muted size={12}>
-                  {roomChecked}/{items.length}
+                  {roomChecked}/{required.length}
                 </Text>
-                {roomChecked === items.length && <Check size={16} color={c.success} />}
+                {roomChecked === required.length && <Check size={16} color={c.success} />}
               </Pressable>
               {expanded && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 14 }}>
-                  {roomChecked < items.length && <Button title="Mark the rest OK" variant="outline" size="sm" onPress={() => allOk(room, items)} />}
+                  {roomChecked < required.length && <Button title="Mark the rest OK" variant="outline" size="sm" onPress={() => allOk(room, items)} />}
                   {items.map((item) => (
                     <ItemRow
                       key={item}
                       item={item}
                       keys={room === KEYS_ROOM}
+                      optional={isOptionalItem(room, item)}
                       result={byKey.get(keyOf(room, item))}
                       previous={prevByKey.get(keyOf(room, item))}
                       onChange={(patch) => setResult(room, item, patch)}
@@ -346,6 +361,7 @@ const KEY_CHOICES: { key: string; label: string; patch: Partial<InspectionResult
 function ItemRow({
   item,
   keys,
+  optional,
   result,
   previous,
   onChange,
@@ -354,6 +370,8 @@ function ItemRow({
   item: string;
   /** A key or access card: Returned / None / Damaged / Missing, and how many. */
   keys?: boolean;
+  /** Only checked when the unit has it (bedroom TV). */
+  optional?: boolean;
   result?: InspectionResult;
   previous?: InspectionResult;
   onChange: (patch: Partial<InspectionResult>) => void;
@@ -365,7 +383,10 @@ function ItemRow({
   const issue = result && result.condition !== "ok";
   return (
     <View style={{ gap: 8 }}>
-      <Text weight="medium">{item}</Text>
+      <Text weight="medium">
+        {item}
+        {optional ? <Text muted size={12}>{"  (optional)"}</Text> : null}
+      </Text>
       {previous && previous.condition !== "ok" && (
         <Text muted size={12}>
           Last inspection: {previous.condition}
@@ -457,7 +478,7 @@ function PhotoButton({ Icon, label, onPress }: { Icon: typeof Camera; label: str
 }
 
 /** The saved report: summary, items needing attention with photos, notes, and Share PDF. */
-function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; unit: string }) {
+function ReportView({ insp, draft, unit, inspectedBy }: { insp: Inspection; draft: Draft; unit: string; inspectedBy: string | null }) {
   const c = useColors();
   const tplQ = useTemplate(insp.template_id);
   const [sharing, setSharing] = useState(false);
@@ -471,7 +492,7 @@ function ReportView({ insp, draft, unit }: { insp: Inspection; draft: Draft; uni
     try {
       // Photos are embedded in the PDF itself, including ones still on the phone.
       const photoUrls = await photoDataUris(draft.results.flatMap((r) => r.photos));
-      const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls });
+      const html = inspectionReportHtml({ insp: { ...insp, ...draft }, unit, template: tplQ.data ?? null, photoUrls, inspectedBy });
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: `Inspection ${unit}`, UTI: "com.adobe.pdf" });

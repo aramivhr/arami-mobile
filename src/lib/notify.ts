@@ -34,6 +34,7 @@ export function notificationTarget(n: Pick<AppNotification, "kind" | "reservatio
     const id = threadIdFromDedupe(n.dedupe_key);
     return id ? { pathname: "/thread/[id]", params: { id } } : "/messages";
   }
+  // Reservation changes and sync alerts ("alert") open the reservation they name, as on the website.
   return n.reservation_id ? { pathname: "/reservation/[id]", params: { id: n.reservation_id } } : "/reservations";
 }
 
@@ -45,13 +46,15 @@ export type PushData = {
   inspection_id?: string | null;
 };
 
+const NOTIFICATION_KINDS: AppNotification["kind"][] = ["new", "modified", "cancelled", "message", "alert"];
+
 /** Where tapping a phone alert goes (data is set by the mobile-push-dispatch function). */
 export function pushTarget(data: PushData | null | undefined): Target {
   if (data?.type === "inspection") {
     return data.inspection_id ? { pathname: "/inspection/[id]", params: { id: data.inspection_id } } : "/notifications";
   }
-  if (data?.type === "notification" && (data.kind === "new" || data.kind === "modified" || data.kind === "cancelled" || data.kind === "message")) {
-    return notificationTarget({ kind: data.kind, reservation_id: data.reservation_id ?? null, dedupe_key: data.dedupe_key ?? null });
+  if (data?.type === "notification" && NOTIFICATION_KINDS.includes(data.kind as AppNotification["kind"])) {
+    return notificationTarget({ kind: data.kind as AppNotification["kind"], reservation_id: data.reservation_id ?? null, dedupe_key: data.dedupe_key ?? null });
   }
   return "/notifications";
 }

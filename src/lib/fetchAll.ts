@@ -1,8 +1,11 @@
-// The website's src/lib/fetch-all.ts: Supabase returns at most 1000 rows per
-// request and silently drops the rest, so growing lists are read in pages.
+// Supabase returns at most 1000 rows per request and silently drops the rest.
+// There are more than 1000 reservations, so a single request hid every stay
+// past the cut-off (the newest check-ins) and the dashboard counts came out
+// lower than the website's. Same helper as the website's src/lib/fetch-all.ts.
 
 export const PAGE_SIZE = 1000;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PageResult = PromiseLike<{ data: any; error: any }>;
 
 /** Reads every row by calling `build(from, to)` page by page. The query must have a stable order. */

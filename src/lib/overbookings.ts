@@ -1,0 +1,122 @@
+// Copied from the website (rent-halo-system src/lib/overbookings.ts); tests/overbookings.test.ts
+// checks it against the live website code, so keep the logic identical.
+
+// Overbookings: channel bookings that arrived when every unit they could go in
+// was already taken. The booking import parks them as
+// channex_booking_intake.status = 'needs_manual_assignment' and does not create
+// a reservation (see supabase/functions/_shared/channex-booking.ts), so the
+// calendar shows them from the intake rows instead. Once a unit is freed the
+// next feed poll imports the booking and it drops off this list.
+
+export interface IntakeRow {
+  channex_booking_id: string;
+  channex_property_id: string;
+  received_at: string;
+  status: string;
+  error?: string | null;
+  // The Channex revision as received; its shape varies by endpoint.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw_revision?: any;
+}
+
+export interface MappingRow {
+  entity_type: string;
+  channex_id: string;
+  internal_id: string;
+}
+
+export interface Overbooking {
+  key: string;
+  guestName: string;
+  ref: string;
+  channel: string;
+  checkIn: string;
+  checkOut: string;
+  /** The units this booking could go in (one apartment, or a group's units). */
+  unitIds: string[];
+  adults: number | null;
+  children: number | null;
+  amount: number | null;
+  currency: string;
+  receivedAt: string;
+  reason: string | null;
+}
+
+type Room = { room_type_id?: string; checkin_date?: string; checkout_date?: string; amount?: unknown; occupancy?: { adults?: number; children?: number } };
+
+const revisionOf = (raw: IntakeRow["raw_revision"]) => raw?.data?.attributes ?? raw?.attributes ?? raw?.data ?? raw ?? {};
+
+/** Same reference scheme as the import: room 2 of booking X is "X-2". */
+export const roomRef = (baseRef: string, roomIndex: number) => (roomIndex === 0 ? baseRef : `${baseRef}-${roomIndex + 1}`);
+
+function guestName(customer: { name?: string; surname?: string; full_name?: string } | undefined) {
+  const joined = [customer?.name, customer?.surname].map((p) => (typeof p === "string" ? p.trim() : "")).filter(Boolean).join(" ");
+  return joined || customer?.full_name?.trim() || "Unknown guest";
+}
+
+const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+
+export function buildOverbookings(
+  intake: IntakeRow[],
+  mappings: MappingRow[],
+  apartments: { id: string; room_type_id?: string | null }[],
+  reservations: { external_booking_id?: string | null; status: string }[],
+): Overbooking[] {
+  // Only a booking whose latest revision is still waiting for a unit.
+  const latest = new Map<string, IntakeRow>();
+  for (const row of intake) {
+    const seen = latest.get(row.channex_booking_id);
+    if (!seen || row.received_at > seen.received_at) latest.set(row.channex_booking_id, row);
+  }
+  const imported = new Set(
+    reservations.filter((r) => r.status !== "cancelled" && r.external_booking_id).map((r) => r.external_booking_id as string),
+  );
+  const unitsFor = (internalId: string) => {
+    const self = apartments.find((a) => a.id === internalId);
+    return self ? [self.id] : apartments.filter((a) => a.room_type_id === internalId).map((a) => a.id);
+  };
+
+  const out: Overbooking[] = [];
+  for (const row of latest.values()) {
+    if (row.status !== "needs_manual_assignment") continue;
+    const rev = revisionOf(row.raw_revision);
+    if (rev.status === "cancelled") continue;
+    const baseRef: string = rev.ota_reservation_code ?? row.channex_booking_id;
+    const rooms: (Room | undefined)[] = Array.isArray(rev.rooms) && rev.rooms.length ? rev.rooms : [undefined];
+    const propertyMaps = mappings.filter((m) => m.entity_type === "property" && m.channex_id === row.channex_property_id);
+
+    rooms.forEach((room, i) => {
+      const ref = roomRef(baseRef, i);
+      // Rooms of a multi-room booking that did get a unit are already in the calendar.
+      if (imported.has(ref)) return;
+      const multi = rooms.length > 1;
+      const checkIn = multi ? room?.checkin_date ?? rev.arrival_date : rev.arrival_date ?? room?.checkin_date;
+      const checkOut = multi ? room?.checkout_date ?? rev.departure_date : rev.departure_date ?? room?.checkout_date;
+      if (!checkIn || !checkOut) return;
+
+      let internalId: string | undefined;
+      if (propertyMaps.length === 1) internalId = propertyMaps[0].internal_id;
+      else {
+        const rt = mappings.find((m) => m.entity_type === "room_type" && m.channex_id === room?.room_type_id);
+        internalId = propertyMaps.find((m) => m.internal_id === rt?.internal_id)?.internal_id;
+      }
+      const occ = room?.occupancy ?? rev.occupancy;
+      out.push({
+        key: `${row.channex_booking_id}:${i}`,
+        guestName: guestName(rev.customer),
+        ref,
+        channel: rev.ota_name ?? "Channel",
+        checkIn,
+        checkOut,
+        unitIds: internalId ? unitsFor(internalId) : [],
+        adults: num(occ?.adults),
+        children: num(occ?.children),
+        amount: num(multi ? room?.amount : rev.amount),
+        currency: rev.currency ?? "AED",
+        receivedAt: row.received_at,
+        reason: row.error ?? null,
+      });
+    });
+  }
+  return out.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
+}

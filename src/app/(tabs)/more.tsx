@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Alert, Pressable, Switch, View } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
-import { Bell, BellRing, BookOpen, ChevronRight, DollarSign, Fingerprint, LogOut, User } from "lucide-react-native";
+import { Bell, BellRing, BookOpen, Building2, ChevronRight, DollarSign, Fingerprint, LogOut, User } from "lucide-react-native";
 import { Screen } from "@/components/Screen";
 import { Card, Divider, PageHeader, Text } from "@/components/ui";
 import { useAuth } from "@/hooks/auth";
@@ -13,9 +13,10 @@ import { useColors } from "@/lib/theme";
 
 const SCREEN_META: Record<
   Exclude<ScreenKey, "messages" | "inspections">,
-  { label: string; href: "/reservations" | "/notifications" | "/financial" | "/alert-settings"; Icon: typeof Bell }
+  { label: string; href: "/reservations" | "/notifications" | "/financial" | "/alert-settings" | "/building-email"; Icon: typeof Bell }
 > = {
   reservations: { label: "Reservations", href: "/reservations", Icon: BookOpen },
+  building_email: { label: "Email a building", href: "/building-email", Icon: Building2 },
   notifications: { label: "Notifications", href: "/notifications", Icon: Bell },
   alert_settings: { label: "Phone alerts", href: "/alert-settings", Icon: BellRing },
   financial: { label: "Financial", href: "/financial", Icon: DollarSign },

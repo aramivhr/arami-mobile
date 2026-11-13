@@ -79,7 +79,10 @@ export function confirmationHtml(p: {
     row("Booking source", SOURCE_LABEL[r.source ?? "direct"] ?? String(r.source)) +
       (isDirect && r.direct_payment_method ? row("Payment method", directPaymentLabel(r.direct_payment_method)) : "") +
       (p.showFinancial
-        ? row("Total amount", money(total), true)
+        ? row("Total amount", money(total), true) +
+          // Channel bookings are paid through the channel; a direct booking's
+          // payment is not recorded in the portal, so only its total is shown.
+          (isDirect ? "" : row("Amount paid", money(total)) + row("Balance remaining", money(0), true))
         : ""),
   )}
   ${r.notes ? `<h3>Notes</h3><div style="font-size:13px">${esc(r.notes)}</div>` : ""}

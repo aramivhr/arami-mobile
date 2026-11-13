@@ -8,9 +8,18 @@ type Filter = (r: Row) => boolean;
 export interface FakeOptions {
   /** Unique keys per table, used by upsert's onConflict and plain inserts. */
   unique?: Record<string, string[][]>;
+  /**
+   * Unique indexes that have a WHERE clause, e.g. notifications.dedupe_key
+   * (WHERE dedupe_key IS NOT NULL). Postgres cannot use them for
+   * ON CONFLICT (col), so upsert with that onConflict fails as it does live.
+   */
+  partialUnique?: Record<string, string[]>;
   /** Adds joined data such as apartments(name, buildings(name)). */
   join?: (table: string, row: Row, select: string) => Row;
 }
+
+/** The live Supabase API returns at most this many rows per request. */
+export const MAX_ROWS = 1000;
 
 export class FakeSupabase {
   tables: Record<string, Row[]> = {};
@@ -61,6 +70,22 @@ export class FakeSupabase {
     }),
   };
 
+  /** Database functions callable with rpc(); a missing one fails as it does before Lovable adds it. */
+  rpcHandlers: Record<string, (args: any) => any> = {};
+  rpcCalls: { name: string; args: any }[] = [];
+
+  async rpc(name: string, args: any = {}) {
+    try {
+      this.check("rpc");
+    } catch (e) {
+      return { data: null, error: { message: (e as Error).message } };
+    }
+    this.rpcCalls.push({ name, args });
+    const fn = this.rpcHandlers[name];
+    if (!fn) return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name}` } };
+    return { data: await fn(args), error: null };
+  }
+
   functions = {
     invoke: async (name: string, { body }: { body: any }) => {
       try {
@@ -99,12 +124,18 @@ export class FakeSupabase {
 
     if (q.op === "select") {
       let out = rows.filter(match);
-      for (const [col, asc] of q.orders) {
+      if (q.head) return { data: null, error: null, count: out.length };
+      const total = out.length;
+      // Applied last key first; the sort is stable, so the first order() call is the main key.
+      for (const [col, asc] of [...q.orders].reverse()) {
         out = [...out].sort((a, b) => (a[col] === b[col] ? 0 : (a[col] ?? "") < (b[col] ?? "") ? (asc ? -1 : 1) : asc ? 1 : -1));
       }
+      if (q.rangeFrom != null) out = out.slice(q.rangeFrom, (q.rangeTo ?? q.rangeFrom) + 1);
       if (q.limitN != null) out = out.slice(0, q.limitN);
+      // Like the live API (PostgREST max rows): never more than 1000 rows per request, no error.
+      out = out.slice(0, MAX_ROWS);
       out = out.map((r) => this.project(q, r));
-      return this.shape(q, out);
+      return this.shape(q, out, q.countExact ? total : undefined);
     }
     if (q.op === "update") {
       const hit = rows.filter(match);
@@ -119,6 +150,9 @@ export class FakeSupabase {
     }
     // insert / upsert
     const incoming = (Array.isArray(q.payload) ? q.payload : [q.payload]) as Row[];
+    if (q.op === "upsert" && q.onConflict && (this.opts.partialUnique?.[q.table] ?? []).includes(q.onConflict.replace(/\s/g, ""))) {
+      return { data: null, error: { code: "42P10", message: "there is no unique or exclusion constraint matching the ON CONFLICT specification" } };
+    }
     const conflictCols = q.onConflict ? [q.onConflict.split(",").map((s) => s.trim())] : unique;
     const inserted: Row[] = [];
     for (const raw of incoming) {
@@ -128,7 +162,7 @@ export class FakeSupabase {
       );
       if (clash) {
         if (q.op === "upsert" && !q.ignoreDuplicates) Object.assign(clash, row);
-        else if (q.op === "insert") return { data: null, error: { message: "duplicate key value violates unique constraint" } };
+        else if (q.op === "insert") return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
         continue;
       }
       row.id ??= this.nextId();
@@ -165,6 +199,8 @@ export class Query implements PromiseLike<any> {
   filterText: string[] = [];
   orders: [string, boolean][] = [];
   limitN: number | null = null;
+  rangeFrom: number | null = null;
+  rangeTo: number | null = null;
   mode: "single" | "maybe" | null = null;
   onConflict: string | undefined;
   ignoreDuplicates = false;
@@ -176,7 +212,12 @@ export class Query implements PromiseLike<any> {
     _opts: FakeOptions,
   ) {}
 
-  select(cols = "*") {
+  countExact = false;
+  head = false;
+
+  select(cols = "*", o: { count?: string; head?: boolean } = {}) {
+    if (o.count === "exact") this.countExact = true;
+    if (o.head) this.head = true;
     if (this.op === "select") this.columns = cols;
     else this.returning = true;
     return this;
@@ -229,11 +270,18 @@ export class Query implements PromiseLike<any> {
     if (op === "is" && v === null) return this.add(`${c}=not.is.null`, (r) => r[c] != null);
     throw new Error(`fake: unsupported not(${op})`);
   }
-  /** Supports the "a.in.(x,y),b.in.(z)" form. */
+  /** Supports "a.in.(x,y)", "a.is.null" and "a.not.like.prefix*" terms, comma-separated. */
   or(expr: string) {
-    const parts = [...expr.matchAll(/(\w+)\.in\.\(([^)]*)\)/g)].map((m) => [m[1], m[2].split(",")] as const);
-    if (!parts.length) throw new Error(`fake: unsupported or(${expr})`);
-    return this.add(`or=(${expr})`, (r) => parts.some(([c, vs]) => vs.includes(String(r[c]))));
+    const terms = expr.split(/,(?![^()]*\))/).map((t): ((r: Row) => boolean) => {
+      let m = t.match(/^(\w+)\.in\.\(([^)]*)\)$/);
+      if (m) { const [c, vs] = [m[1], m[2].split(",")]; return (r) => vs.includes(String(r[c])); }
+      m = t.match(/^(\w+)\.is\.null$/);
+      if (m) { const c = m[1]; return (r) => r[c] == null; }
+      m = t.match(/^(\w+)\.not\.like\.([^*]*)\*$/);
+      if (m) { const [c, p] = [m[1], m[2]]; return (r) => r[c] != null && !String(r[c]).startsWith(p); }
+      throw new Error(`fake: unsupported or(${expr})`);
+    });
+    return this.add(`or=(${expr})`, (r) => terms.some((f) => f(r)));
   }
   order(c: string, o: { ascending?: boolean } = {}) {
     this.orders.push([c, o.ascending !== false]);
@@ -241,6 +289,11 @@ export class Query implements PromiseLike<any> {
   }
   limit(n: number) {
     this.limitN = n;
+    return this;
+  }
+  range(from: number, to: number) {
+    this.rangeFrom = from;
+    this.rangeTo = to;
     return this;
   }
   maybeSingle() {

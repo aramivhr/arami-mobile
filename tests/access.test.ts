@@ -15,12 +15,13 @@ const WEB_PATH: Record<TabKey | ScreenKey, string | null> = {
   more: "/",
   inspections: null,
   alert_settings: null,
+  building_email: null,
 };
 
 describe("Gevorg's tab and page choices", () => {
   const expected: Record<UserType, string[]> = {
-    super_admin: ["dashboard", "calendar", "messages", "inspections", "reservations", "notifications", "alert_settings", "financial"],
-    admin: ["dashboard", "calendar", "messages", "inspections", "reservations", "notifications", "alert_settings"],
+    super_admin: ["dashboard", "calendar", "messages", "inspections", "reservations", "building_email", "notifications", "alert_settings", "financial"],
+    admin: ["dashboard", "calendar", "messages", "inspections", "reservations", "building_email", "notifications", "alert_settings"],
     owner: ["dashboard", "calendar", "reservations", "financial"],
   };
   const all = Object.keys(WEB_PATH).filter((k) => k !== "more");

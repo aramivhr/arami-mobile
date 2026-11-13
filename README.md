@@ -63,6 +63,8 @@ The app uses the website's Supabase (Lovable Cloud). Its own data lives only in
 - `mobile_inspection_templates`, `mobile_inspections`, storage bucket `mobile-inspection-photos`
 - `mobile-push-dispatch` (every minute: guest-message notifications, today's inspections, Expo pushes),
   `mobile-inspection-summary` (AI report), `mobile-inspection-complete`
+- `mobile_message_senders` and `mobile_staff_names()` (who sent each guest reply from the app and
+  staff names, readable by super admins only; Lovable prompt `lovable-prompt-staff-attribution.md`)
 
 ## Phone alerts setup (once, before the first build)
 

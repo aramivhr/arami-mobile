@@ -14,11 +14,16 @@ import {
   useReservations,
   useUpdateReservation,
 } from "@/hooks/data";
-import type { DirectPaymentMethod, Reservation, ReservationStatus } from "@/lib/types";
+import type { DirectPaymentMethod, Reservation, ReservationSource, ReservationStatus } from "@/lib/types";
 
-// Create or edit a reservation. Per Gevorg's rule the app only creates and
-// edits DIRECT reservations; channel bookings (Airbnb, Booking.com) are
-// read-only here and are managed through Channex as before.
+// Create or edit a reservation, as the website's calendar does. New bookings
+// are always direct. Editing can change the source (Airbnb, Booking.com, direct),
+// as the website's Reservations page does; only Arami's own bookings carry a payment method.
+
+/** Booked with Arami itself rather than through a channel (website's isOwnBooking). */
+export function isOwnBooking(source: string | null | undefined): boolean {
+  return !source || source === "direct" || source === "website";
+}
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -26,6 +31,14 @@ const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: "checked-in", label: "Checked In" },
   { value: "checked-out", label: "Checked Out" },
   { value: "cancelled", label: "Cancelled" },
+];
+
+// The website's SourceSelect (Reservations page edit). A "website" booking keeps
+// its own option so opening and saving it never changes where it came from.
+const SOURCE_OPTIONS: { value: ReservationSource; label: string }[] = [
+  { value: "booking", label: "Booking.com" },
+  { value: "airbnb", label: "Airbnb" },
+  { value: "direct", label: "Direct" },
 ];
 
 interface FormState {
@@ -38,6 +51,7 @@ interface FormState {
   total_price: string;
   notes: string;
   status: ReservationStatus;
+  source: ReservationSource;
   direct_payment_method: DirectPaymentMethod;
   adults: string;
   children: string;
@@ -54,6 +68,7 @@ const empty: FormState = {
   total_price: "",
   notes: "",
   status: "pending",
+  source: "direct",
   direct_payment_method: "cash",
   adults: "1",
   children: "0",
@@ -103,6 +118,7 @@ export function ReservationForm({
         total_price: String(editing.total_price ?? ""),
         notes: editing.notes ?? "",
         status: editing.status,
+        source: (editing.source as ReservationSource) || "direct",
         direct_payment_method: (editing.direct_payment_method as DirectPaymentMethod) || "cash",
         adults: String(editing.adults ?? 1),
         children: String(editing.children ?? 0),
@@ -124,6 +140,9 @@ export function ReservationForm({
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
+  // As on the website, the payment method follows the source chosen in the form.
+  const editingOwn = !editing || isOwnBooking(form.source);
+
   const save = async () => {
     const payload = {
       apartment_id: form.apartment_id,
@@ -133,17 +152,28 @@ export function ReservationForm({
       check_in: form.check_in,
       check_out: form.check_out,
       total_price: Number(form.total_price) || 0,
-      source: "direct" as const,
-      direct_payment_method: form.direct_payment_method,
       notes: form.notes,
     };
     try {
       if (editing) {
-        await updateMut.mutateAsync({ id: editing.id, ...payload, status: form.status });
+        await updateMut.mutateAsync({
+          id: editing.id,
+          ...payload,
+          status: form.status,
+          // The website's edit lets the source be changed too.
+          source: form.source || "direct",
+          direct_payment_method: editingOwn ? form.direct_payment_method : null,
+        });
         Alert.alert("Reservation updated", `Booking for ${form.guest_name} has been modified.`);
       } else {
         // Like the website, guest counts are set when a booking is created.
-        await addMut.mutateAsync({ ...payload, ...guestCounts(form), status: newStatus });
+        await addMut.mutateAsync({
+          ...payload,
+          ...guestCounts(form),
+          status: newStatus,
+          source: "direct",
+          direct_payment_method: form.direct_payment_method,
+        });
         Alert.alert("Reservation created", `Booking for ${form.guest_name} has been added.`);
       }
       setOverlaps(null);
@@ -219,6 +249,15 @@ export function ReservationForm({
             <Select value={form.status} options={STATUS_OPTIONS} onChange={(v) => set({ status: v })} />
           </Field>
         )}
+        {editing && (
+          <Field label="Source">
+            <Select
+              value={form.source}
+              options={form.source === "website" ? [...SOURCE_OPTIONS, { value: "website", label: "Website" }] : SOURCE_OPTIONS}
+              onChange={(v) => set({ source: v })}
+            />
+          </Field>
+        )}
         {!editing && (
           <Field label="Number of guests *">
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -242,9 +281,11 @@ export function ReservationForm({
         <Field label="Notes">
           <Input value={form.notes} onChangeText={(v) => set({ notes: v })} />
         </Field>
-        <Field label="Payment Method *">
-          <DirectPaymentSelect value={form.direct_payment_method} onChange={(v) => set({ direct_payment_method: v })} />
-        </Field>
+        {editingOwn && (
+          <Field label="Payment Method *">
+            <DirectPaymentSelect value={form.direct_payment_method} onChange={(v) => set({ direct_payment_method: v })} />
+          </Field>
+        )}
       </Sheet>
 
       <Sheet

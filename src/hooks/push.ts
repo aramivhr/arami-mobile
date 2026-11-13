@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
@@ -100,18 +100,31 @@ export function openFromPush(data: PushData) {
   router.push(pushTarget(data));
 }
 
-/** Opens the right screen when someone taps an alert, including the one that launched the app. */
-export function usePushRouting() {
+/**
+ * Opens the right screen when someone taps an alert, including the one that launched the app.
+ * `ready` is false until the screens are on show (app still starting or locked by Face ID);
+ * a tap that arrives before then waits, so the screen opens on top of the Dashboard and
+ * Back leads there instead of the app having no way back.
+ */
+export function usePushRouting(ready = true) {
   const qc = useQueryClient();
+  const pending = useRef<PushData | null>(null);
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+
   useEffect(() => {
     if (Platform.OS === "web") return;
+    const open = (data: PushData) => {
+      if (readyRef.current) openFromPush(data);
+      else pending.current = data;
+    };
     const last = Notifications.getLastNotificationResponse();
     if (last) {
-      openFromPush(last.notification.request.content.data as PushData);
+      open(last.notification.request.content.data as PushData);
       Notifications.clearLastNotificationResponse();
     }
     const tap = Notifications.addNotificationResponseReceivedListener((r) => {
-      openFromPush(r.notification.request.content.data as PushData);
+      open(r.notification.request.content.data as PushData);
     });
     // An alert while the app is open means new data: refresh the lists.
     const received = Notifications.addNotificationReceivedListener(() => {
@@ -124,6 +137,13 @@ export function usePushRouting() {
       received.remove();
     };
   }, [qc]);
+
+  useEffect(() => {
+    if (!ready || !pending.current) return;
+    const data = pending.current;
+    pending.current = null;
+    openFromPush(data);
+  }, [ready]);
 }
 
 export const ALERT_TYPES: { key: keyof Omit<NotificationSettings, "user_id">; label: string; hint: string; superOnly?: boolean }[] = [
@@ -131,7 +151,6 @@ export const ALERT_TYPES: { key: keyof Omit<NotificationSettings, "user_id">; la
   { key: "reservation_modified", label: "Changed reservations", hint: "Dates, guests or price changed" },
   { key: "reservation_cancelled", label: "Cancelled reservations", hint: "" },
   { key: "guest_message", label: "Guest messages", hint: "Airbnb, Booking.com and other channels" },
-  { key: "inspection_due", label: "Inspections due", hint: "When a guest checks out" },
   { key: "inspection_damage", label: "Damage found", hint: "Super admins only", superOnly: true },
   { key: "sync_failure", label: "Channel sync failures", hint: "When an update to Channex fails" },
 ];

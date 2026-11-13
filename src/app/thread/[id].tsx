@@ -6,6 +6,8 @@ import { Info, Send } from "lucide-react-native";
 import { Input, Sheet, Text } from "@/components/ui";
 import { KindBadge } from "@/components/badges";
 import { RequireScreen } from "@/components/RequireScreen";
+import { useAuth } from "@/hooks/auth";
+import { nameOf, useIsSuperAdmin, useMessageSenders, useStaffNames } from "@/hooks/staff";
 import { attachmentUrls, guestSummary, kindLabel, threadName, useSeen, useSendMessage, useThreadMessages, useThreads } from "@/hooks/messages";
 import { dateTime, shortDate, prettyDate } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
@@ -33,6 +35,11 @@ function ThreadScreen() {
   const listRef = useRef<FlatList>(null);
   const thread = threadsQ.data?.threads.find((t) => t.id === id);
   const messages = msgsQ.data?.messages ?? [];
+  // Super admins see which staff member sent each reply.
+  const { user } = useAuth();
+  const superAdmin = useIsSuperAdmin();
+  const names = useStaffNames(superAdmin).data;
+  const senders = useMessageSenders(id, messages, superAdmin);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -92,6 +99,7 @@ function ThreadScreen() {
           const mine = m.sender === "property";
           const system = m.sender === "system";
           const images = attachmentUrls(m.attachments);
+          const by = !superAdmin || !mine ? null : m.id.startsWith("tmp-") ? user?.id : senders[m.id];
           return (
             <View style={{ alignItems: mine ? "flex-end" : system ? "center" : "flex-start" }}>
               <View
@@ -120,6 +128,11 @@ function ThreadScreen() {
                   </Text>
                 )}
               </View>
+              {superAdmin && mine && (
+                <Text size={11} muted style={{ marginTop: 2 }}>
+                  {by ? `Sent by ${nameOf(names, by, user?.id)}` : "Sender not recorded (sent outside the app)"}
+                </Text>
+              )}
             </View>
           );
         }}
