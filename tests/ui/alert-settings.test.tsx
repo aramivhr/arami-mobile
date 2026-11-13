@@ -14,7 +14,6 @@ const TYPES = [
   ["reservation_modified", "Changed reservations"],
   ["reservation_cancelled", "Cancelled reservations"],
   ["guest_message", "Guest messages"],
-  ["inspection_due", "Inspections due"],
   ["inspection_damage", "Damage found"],
   ["sync_failure", "Channel sync failures"],
 ] as const;
@@ -22,7 +21,7 @@ const TYPES = [
 const scen = cases(600, 9801, (r) => ({
   role: r.pick(["admin", "super_admin"] as const) as Role,
   saved: r.bool(0.6) ? Object.fromEntries(TYPES.map(([k]) => [k, r.bool(0.7)])) : null,
-  flips: Array.from({ length: r.int(1, 3) }, () => r.int(0, 6)),
+  flips: Array.from({ length: r.int(1, 3) }, () => r.int(0, TYPES.length - 1)),
 }));
 
 describe("Phone alerts settings", () => {

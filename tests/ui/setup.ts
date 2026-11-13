@@ -62,7 +62,21 @@ vi.mock("expo-notifications", () => ({
   requestPermissionsAsync: async () => ({ status: "granted" }),
   getExpoPushTokenAsync: async () => ({ data: "ExponentPushToken[test]" }),
   setNotificationChannelAsync: async () => {},
-  addNotificationResponseReceivedListener: () => ({ remove() {} }),
+  // A test can set __notif.last (the alert that launched the app) and call __notif.tap(data).
+  addNotificationResponseReceivedListener: (fn: (r: unknown) => void) => {
+    const g = globalThis as any;
+    g.__notif ??= {};
+    g.__notif.tap = (data: unknown) => fn({ notification: { request: { content: { data } } } });
+    return { remove() {} };
+  },
+  addNotificationReceivedListener: () => ({ remove() {} }),
+  getLastNotificationResponse: () => {
+    const d = (globalThis as any).__notif?.last;
+    return d ? { notification: { request: { content: { data: d } } } } : null;
+  },
+  clearLastNotificationResponse: () => {
+    if ((globalThis as any).__notif) (globalThis as any).__notif.last = null;
+  },
   getLastNotificationResponseAsync: async () => null,
   AndroidImportance: { HIGH: 4 },
 }));

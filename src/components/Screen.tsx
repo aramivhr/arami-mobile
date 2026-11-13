@@ -15,12 +15,15 @@ export function Screen({
   refreshing = false,
   contentStyle,
   scroll = true,
+  stickyHeaderIndices,
 }: {
   children: React.ReactNode;
   onRefresh?: () => void;
   refreshing?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
   scroll?: boolean;
+  /** Children (by position) that stay pinned to the top while scrolling, e.g. the calendar's date row. */
+  stickyHeaderIndices?: number[];
 }) {
   const c = useColors();
   const inner: StyleProp<ViewStyle> = [{ padding: 14, gap: 16, width: "100%", maxWidth: 900, alignSelf: "center" }, contentStyle];
@@ -31,6 +34,7 @@ export function Screen({
       contentContainerStyle={inner}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} /> : undefined}
       keyboardShouldPersistTaps="handled"
+      stickyHeaderIndices={stickyHeaderIndices}
     >
       {children}
     </ScrollView>

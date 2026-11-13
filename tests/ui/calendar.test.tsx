@@ -4,7 +4,7 @@ import CalendarScreen from "@/app/(tabs)/calendar";
 import { APARTMENTS, BUILDINGS, isoShift, press, pushes, render, setup, textOf, byLabel, type Role } from "./harness";
 import { cases } from "../rand";
 import { buildOverbookings } from "@/lib/overbookings";
-import { dateStr, daysInMonth, formatAmount, formatMonth, nightsBetween } from "@/lib/dates";
+import { calendarDays, dateStr, formatAmount, formatMonth, nightsBetween, todayScrollX } from "@/lib/dates";
 
 // The calendar rendered for random months: overbooking rows (admins only),
 // price-first booking labels, the legend, and the overbooking details sheet.
@@ -72,9 +72,18 @@ describe("Calendar", () => {
     const text = textOf(r);
     expect(text).toContain(formatMonth(c.year, c.month));
 
-    const n = daysInMonth(c.year, c.month);
-    const start = dateStr(c.year, c.month, 1);
-    const end = dateStr(c.year, c.month, n);
+    // Columns: the month, plus up to 2 days before and some after so today is third from the left (14 fit on a phone).
+    const today = new Date(c.now);
+    const todayStr = dateStr(today.getFullYear(), today.getMonth(), today.getDate());
+    const cols = calendarDays(c.year, c.month, todayStr, 14);
+    const start = cols[0].ds;
+    const end = cols[cols.length - 1].ds;
+    const ti = cols.findIndex((d) => d.ds === todayStr);
+    expect(ti).toBeGreaterThanOrEqual(2);
+    expect(cols.length - ti).toBeGreaterThanOrEqual(12);
+    expect(todayScrollX(cols, todayStr, 10)).toBe((ti - 2) * 10);
+    // The date row is pinned at the top of the page.
+    expect(r.root.findAll((x) => (x.type as unknown) === "ScrollView" && Array.isArray(x.props.stickyHeaderIndices))[0]?.props.stickyHeaderIndices).toEqual([2]);
     const admin = c.role !== "owner";
     const all = admin ? buildOverbookings(c.intake as any, MAPPINGS, APARTMENTS, c.reservations) : [];
     const shown = all.filter((o) => !(o.checkOut <= start || o.checkIn > end));

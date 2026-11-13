@@ -29,7 +29,7 @@ import {
   type Draft,
 } from "@/hooks/inspections";
 import { conditionText, inspectionReportHtml } from "@/lib/inspectionReport";
-import { KEYS_ROOM, applyResult, keyOf, markRestOk, progress, withKeysSection } from "@/lib/inspectionDraft";
+import { KEYS_ROOM, applyResult, isOptionalItem, keyOf, markRestOk, progress, requiredItems, withKeysSection } from "@/lib/inspectionDraft";
 import { dateTime, prettyDate } from "@/lib/dates";
 import { useColors } from "@/lib/theme";
 import type { Inspection, InspectionResult, ItemCondition } from "@/lib/types";
@@ -273,7 +273,9 @@ function InspectionScreen() {
 
       {!readOnly &&
         rooms.map(({ room, items }) => {
-          const roomChecked = items.filter((i) => byKey.has(keyOf(room, i))).length;
+          // Optional items (bedroom TV) don't count towards the room being done.
+          const required = requiredItems(room, items);
+          const roomChecked = required.filter((i) => byKey.has(keyOf(room, i))).length;
           const roomIssues = items.filter((i) => (byKey.get(keyOf(room, i))?.condition ?? "ok") !== "ok").length;
           const expanded = openRoom === room;
           return (
@@ -285,18 +287,19 @@ function InspectionScreen() {
                 </Text>
                 {roomIssues > 0 && <Badge label={`${roomIssues} issue${roomIssues === 1 ? "" : "s"}`} color={c.destructive} bg={withAlpha(c.destructive, 0.12)} />}
                 <Text muted size={12}>
-                  {roomChecked}/{items.length}
+                  {roomChecked}/{required.length}
                 </Text>
-                {roomChecked === items.length && <Check size={16} color={c.success} />}
+                {roomChecked === required.length && <Check size={16} color={c.success} />}
               </Pressable>
               {expanded && (
                 <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 14 }}>
-                  {roomChecked < items.length && <Button title="Mark the rest OK" variant="outline" size="sm" onPress={() => allOk(room, items)} />}
+                  {roomChecked < required.length && <Button title="Mark the rest OK" variant="outline" size="sm" onPress={() => allOk(room, items)} />}
                   {items.map((item) => (
                     <ItemRow
                       key={item}
                       item={item}
                       keys={room === KEYS_ROOM}
+                      optional={isOptionalItem(room, item)}
                       result={byKey.get(keyOf(room, item))}
                       previous={prevByKey.get(keyOf(room, item))}
                       onChange={(patch) => setResult(room, item, patch)}
@@ -358,6 +361,7 @@ const KEY_CHOICES: { key: string; label: string; patch: Partial<InspectionResult
 function ItemRow({
   item,
   keys,
+  optional,
   result,
   previous,
   onChange,
@@ -366,6 +370,8 @@ function ItemRow({
   item: string;
   /** A key or access card: Returned / None / Damaged / Missing, and how many. */
   keys?: boolean;
+  /** Only checked when the unit has it (bedroom TV). */
+  optional?: boolean;
   result?: InspectionResult;
   previous?: InspectionResult;
   onChange: (patch: Partial<InspectionResult>) => void;
@@ -377,7 +383,10 @@ function ItemRow({
   const issue = result && result.condition !== "ok";
   return (
     <View style={{ gap: 8 }}>
-      <Text weight="medium">{item}</Text>
+      <Text weight="medium">
+        {item}
+        {optional ? <Text muted size={12}>{"  (optional)"}</Text> : null}
+      </Text>
       {previous && previous.condition !== "ok" && (
         <Text muted size={12}>
           Last inspection: {previous.condition}

@@ -1,6 +1,6 @@
 import { COMPANY_ADDRESS, COMPANY_NAME, COMPANY_PHONE, COMPANY_WEBSITE } from "@/lib/company";
 import { dateTime, prettyDate } from "@/lib/dates";
-import { KEYS_ROOM, withKeysSection } from "@/lib/inspectionDraft";
+import { KEYS_ROOM, isOptionalItem, withKeysSection } from "@/lib/inspectionDraft";
 import type { Inspection, InspectionResult, InspectionTemplate } from "@/lib/types";
 
 // HTML for the shareable inspection report PDF (printed with expo-print).
@@ -67,6 +67,8 @@ export function inspectionReportHtml({
       const rows = names
         .map((item) => {
           const r = insp.results.find((x) => x.room === room && x.item === item);
+          // An optional item (bedroom TV) appears only once someone checked it.
+          if (!r && isOptionalItem(room, item)) return "";
           const c = r ? CONDITION[r.condition] : null;
           return `<tr><td>${esc(item)}</td><td style="color:${c?.color ?? "#64748b"}">${r ? esc(conditionText(r)) : "Not checked"}</td><td>${esc(r?.note)}</td></tr>`;
         })

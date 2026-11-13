@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
-import { View } from "react-native";
-import { Stack } from "expo-router";
+import { Pressable, View } from "react-native";
+import { router, Stack, useRootNavigationState } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -22,6 +23,25 @@ import { fonts, useColors } from "@/lib/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// A screen opened straight from a phone alert or a link still has the tabs
+// underneath it, so Back returns to the Dashboard.
+export const unstable_settings = { initialRouteName: "(tabs)" };
+
+/** Back button for a screen with nothing behind it (opened from an alert): goes to the Dashboard. */
+function DashboardBack({ color }: { color: string }) {
+  return (
+    <Pressable
+      onPress={() => router.replace("/")}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="Back to Dashboard"
+      style={{ flexDirection: "row", alignItems: "center", paddingRight: 8 }}
+    >
+      <ChevronLeft size={26} color={color} />
+    </Pressable>
+  );
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 15_000 } },
 });
@@ -39,11 +59,17 @@ function Root() {
   return <SignedIn />;
 }
 
+/** Opens tapped alerts once the screens are showing (after start-up and Face ID). */
+function PushRouting() {
+  const nav = useRootNavigationState();
+  usePushRouting(!!nav?.key);
+  return null;
+}
+
 /** Everything that needs a signed-in person: alerts, background upload of inspections, the new-booking pop-up, and the screens. */
 function SignedIn() {
   const c = useColors();
   usePushRegistration();
-  usePushRouting();
   useInspectionSync();
   const { data: type } = useUserType();
   const isAdmin = type === "admin" || type === "super_admin";
@@ -52,14 +78,16 @@ function SignedIn() {
   return (
     <BiometricGate>
       <Stack
-        screenOptions={{
+        screenOptions={({ navigation }) => ({
           headerStyle: { backgroundColor: c.card },
           headerTintColor: c.foreground,
           headerTitleStyle: { fontFamily: fonts.semibold },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: c.background },
           headerBackTitle: "Back",
-        }}
+          // Opened from an alert with nothing behind it: show a Back to the Dashboard anyway.
+          headerLeft: navigation.canGoBack() ? undefined : () => <DashboardBack color={c.foreground} />,
+        })}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="thread/[id]" options={{ title: "Conversation" }} />
@@ -71,6 +99,7 @@ function SignedIn() {
         <Stack.Screen name="alert-settings" options={{ title: "Phone alerts" }} />
         <Stack.Screen name="building-email" options={{ title: "Email a building" }} />
       </Stack>
+      <PushRouting />
       {isAdmin && <NewBookingAlert />}
     </BiometricGate>
   );

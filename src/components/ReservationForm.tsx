@@ -14,11 +14,11 @@ import {
   useReservations,
   useUpdateReservation,
 } from "@/hooks/data";
-import type { DirectPaymentMethod, Reservation, ReservationStatus } from "@/lib/types";
+import type { DirectPaymentMethod, Reservation, ReservationSource, ReservationStatus } from "@/lib/types";
 
 // Create or edit a reservation, as the website's calendar does. New bookings
-// are always direct. Editing keeps the booking's source (Airbnb, Booking.com,
-// direct or website); only Arami's own bookings carry a payment method.
+// are always direct. Editing can change the source (Airbnb, Booking.com, direct),
+// as the website's Reservations page does; only Arami's own bookings carry a payment method.
 
 /** Booked with Arami itself rather than through a channel (website's isOwnBooking). */
 export function isOwnBooking(source: string | null | undefined): boolean {
@@ -33,6 +33,14 @@ const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+// The website's SourceSelect (Reservations page edit). A "website" booking keeps
+// its own option so opening and saving it never changes where it came from.
+const SOURCE_OPTIONS: { value: ReservationSource; label: string }[] = [
+  { value: "booking", label: "Booking.com" },
+  { value: "airbnb", label: "Airbnb" },
+  { value: "direct", label: "Direct" },
+];
+
 interface FormState {
   apartment_id: string;
   guest_name: string;
@@ -43,6 +51,7 @@ interface FormState {
   total_price: string;
   notes: string;
   status: ReservationStatus;
+  source: ReservationSource;
   direct_payment_method: DirectPaymentMethod;
   adults: string;
   children: string;
@@ -59,6 +68,7 @@ const empty: FormState = {
   total_price: "",
   notes: "",
   status: "pending",
+  source: "direct",
   direct_payment_method: "cash",
   adults: "1",
   children: "0",
@@ -108,6 +118,7 @@ export function ReservationForm({
         total_price: String(editing.total_price ?? ""),
         notes: editing.notes ?? "",
         status: editing.status,
+        source: (editing.source as ReservationSource) || "direct",
         direct_payment_method: (editing.direct_payment_method as DirectPaymentMethod) || "cash",
         adults: String(editing.adults ?? 1),
         children: String(editing.children ?? 0),
@@ -129,7 +140,8 @@ export function ReservationForm({
 
   const set = (patch: Partial<FormState>) => setForm((f) => ({ ...f, ...patch }));
 
-  const editingOwn = !editing || isOwnBooking(editing.source);
+  // As on the website, the payment method follows the source chosen in the form.
+  const editingOwn = !editing || isOwnBooking(form.source);
 
   const save = async () => {
     const payload = {
@@ -148,8 +160,8 @@ export function ReservationForm({
           id: editing.id,
           ...payload,
           status: form.status,
-          // Keep where the booking came from, like the website's edit.
-          source: editing.source || "direct",
+          // The website's edit lets the source be changed too.
+          source: form.source || "direct",
           direct_payment_method: editingOwn ? form.direct_payment_method : null,
         });
         Alert.alert("Reservation updated", `Booking for ${form.guest_name} has been modified.`);
@@ -235,6 +247,15 @@ export function ReservationForm({
         {editing && (
           <Field label="Status">
             <Select value={form.status} options={STATUS_OPTIONS} onChange={(v) => set({ status: v })} />
+          </Field>
+        )}
+        {editing && (
+          <Field label="Source">
+            <Select
+              value={form.source}
+              options={form.source === "website" ? [...SOURCE_OPTIONS, { value: "website", label: "Website" }] : SOURCE_OPTIONS}
+              onChange={(v) => set({ source: v })}
+            />
           </Field>
         )}
         {!editing && (
